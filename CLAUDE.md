@@ -10,7 +10,7 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
 és főoldalt, grafikonokat, előrejelzést, részletes oldalt és Naplót mutat. Saját webes kezelőoldala is van (OTA, beállítások).
 
 - Tároló: https://github.com/losy58/Ecowitt-Weather-Display, ág: `main` (mindkét kijelzőé). Licenc: GPL-3.0 (`LICENSE`).
-  Ez a fő tároló (a felhasználó döntése, 2026.10.16.). A régi
+  Ez a fő tároló (a felhasználó döntése, 2026.10.16.), **2026.10.16. óta nyilvános**. A régi
   `losy58/ecowitt-weather-console` (v1-v61, `vNN` verziók) 2026.10.16-án törölve a GitHubról; teljes mentése (minden ág és
   címke): Drive `Saját meghajtó/Projektek/ecowitt-weather-console-mentes-2026-10-16.bundle` (visszaállítás: `git clone <fájl>`).
 - **Az előzmény egyetlen commit** (a felhasználó kérése, 2026.10.16.): a nyilvánossá tétel előtt a tárolót töröltük és
