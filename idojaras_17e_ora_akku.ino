@@ -23,11 +23,20 @@ constexpr float BATT_FALL_V = 0.03f, BATT_FULL_V = 4.10f;   // ennyi esés BATT_
 // (mérve 2026.10.15.: hálózati tápon 10 percig 4,12 V; kihúzva 30 mp alatt 4,05 V, 1 perc alatt 3,97 V;
 // visszadugva 20 mp alatt 4,12 V, majd töltés közben 4,18 V)
 constexpr float BATT_LOW_V = 3.5f;               // akkuról menet e alatt: lemerülőben
+// Akku nélküli lap: a mért feszültség vagy nagyon alacsony (BATT_NONE_V alatt; egy Li-akkuval a lap ennél jóval
+// előbb kikapcsol), vagy ugrál (az IP5306 akku nélkül ki-be kapcsolja a töltést: két minta között BATT_JUMP_V-nál
+// nagyobb változás, valódi akkunál a táp kihúzása után is csak pár század volt). Ilyenkor "nincs akku", és nincs
+// áramszünet-figyelés. Ha BATT_NONE_MS-ig nem volt ilyen mérés (pl. utólag akkut tettek bele), újra figyel.
+constexpr float BATT_NONE_V = 2.5f, BATT_JUMP_V = 0.25f;
+constexpr uint32_t BATT_NONE_MS = 10UL * 60000UL;
 static float batt_win[BATT_WIN];
 static int batt_n = 0, batt_i = 0;
 static float batt_min10 = 99.0f, batt_max10 = 0.0f;   // az utolsó 10 perc szélső értékei (a kezelőoldalon)
 static uint32_t batt_since = 0, batt_win10_ms = 0;
 static bool batt_low_sent = false;
+static bool batt_none = false;                   // nincs akku (lásd BATT_NONE_V)
+static uint32_t batt_none_ms = 0;                // az utolsó akku nélküli mérés ideje
+static float batt_prev_raw = NAN;
 static volatile bool rtc_ntp_synced = false;
 
 static void rtc_sntp_cb(struct timeval *) { rtc_ntp_synced = true; }
@@ -46,6 +55,7 @@ static int batt_pct_of(float v) {
 static const char *batt_short() {
   static char b[80];
   if (isnan(batt_v)) return tr("Akku: nincs mérés", "Battery: no reading");
+  if (batt_none) return tr("Akku: nincs", "Battery: none");
   snprintf(b, sizeof(b), tr("Akku: %.2f V (kb. %d %%), %s", "Battery: %.2f V (about %d %%), %s"), batt_v, batt_pct,
            batt_on ? tr("akkuról megy", "on battery") : tr("hálózati táp", "mains power"));
   return b;
@@ -54,6 +64,10 @@ static const char *batt_short() {
 static const char *batt_text() {
   static char b[160];
   if (isnan(batt_v)) return tr("nincs mérés", "no reading");
+  if (batt_none) {
+    snprintf(b, sizeof(b), tr("nincs akku (mért: %.2f V)", "no battery (measured: %.2f V)"), batt_v);
+    return b;
+  }
   snprintf(b, sizeof(b), tr("%.2f V (kb. %d %%), %s; az utolsó 10 percben %.2f - %.2f V",
                             "%.2f V (about %d %%), %s; last 10 minutes %.2f - %.2f V"),
            batt_v, batt_pct, batt_on ? tr("akkuról megy", "on battery") : tr("hálózati táp", "mains power"),
@@ -137,10 +151,27 @@ static void p4_hw_task() {
   uint32_t mv = 0;
   for (int i = 0; i < 8; i++) mv += analogReadMilliVolts(BATT_PIN);
   const float v = mv / 8.0f / 1000.0f * BATT_DIV;
+  // akku nélküli lap?
+  if (v < BATT_NONE_V || (!isnan(batt_prev_raw) && fabsf(v - batt_prev_raw) > BATT_JUMP_V)) {
+    batt_none_ms = millis();
+    if (!batt_none) {
+      batt_none = true;
+      LogOut.printf("Akku: nincs (mért: %.2f V)\n", v);
+      batt_n = batt_i = 0;   // az akku figyelése elölről, ha később lesz akku
+      batt_low_sent = false;
+      if (batt_on) { batt_on = false; update_status_bar(); }   // a korábbi "akkuról megy" téves volt (értesítés nélkül)
+    }
+  } else if (batt_none && millis() - batt_none_ms > BATT_NONE_MS) {
+    batt_none = false;
+    LogOut.printf("Akku: van (%.2f V)\n", v);
+  }
+  batt_prev_raw = v;
   batt_v = isnan(batt_v) ? v : batt_v * 0.5f + v * 0.5f;
   batt_pct = batt_pct_of(batt_v);
   if (millis() - batt_win10_ms > 600000UL) { batt_win10_ms = millis(); batt_min10 = batt_max10 = batt_v; }
   batt_min10 = fminf(batt_min10, batt_v); batt_max10 = fmaxf(batt_max10, batt_v);
+
+  if (batt_none) return;   // nincs akku: nincs áramszünet- és lemerülés-figyelés
 
   // esés / emelkedés az utolsó 2 perchez képest
   if (batt_n >= 15) {   // induláskor már fél perc után (az ablak addig csak részben telt meg)

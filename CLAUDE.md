@@ -24,9 +24,9 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
 - **Kiadás (GitHub Releases)** (2026.10.16.: v1.0): a felhasználóknak kész programfájlok, fordítás nélkül (README:
   „Telepítés fordítás nélkül”). Kijelzőnként a `.pio/build/<env>/firmware.factory.bin` (első telepítés USB-n a `0x0`
   címre: betöltő – a 7B-n 0x0, a P4-en 0x2000 –, partíciótábla, program; az NVS-t üresre írja, az FFat-et nem érinti)
-  és a `firmware.bin` (OTA). Nevük: `Ecowitt-Weather-Display-vX.Y-7B-factory.bin`, `…-7B-ota.bin`, `…-P4-factory.bin`,
-  `…-P4-ota.bin`, mellé `SHA256SUMS.txt`. Menet: mindkét környezet fordítása a commitolt kódból, címke (`vX.Y`) a
-  commitra, `gh release create vX.Y --verify-tag --title "Ecowitt Weather Display vX.Y" --notes-file … <fájlok>`
+  és a `firmware.bin` (OTA). Nevük: `Ecowitt-Weather-Display-vX.Y.Z-7B-factory.bin`, `…-7B-ota.bin`, `…-P4-factory.bin`,
+  `…-P4-ota.bin`, mellé `SHA256SUMS.txt`. Menet: mindkét környezet fordítása a commitolt kódból, címke (`vX.Y.Z`) a
+  commitra, `gh release create vX.Y.Z --verify-tag --title "Ecowitt Weather Display vX.Y.Z" --notes-file … <fájlok>`
   (a jegyzet magyarul és angolul).
 - **Webes telepítő** (2026.10.16.): https://losy58.github.io/Ecowitt-Weather-Display/ (GitHub Pages a `main` ág `docs/`
   mappájából). ESP Web Tools (10.4.0, unpkg-ről): egy „Install / Telepítés” gomb, a lapka alapján választ
@@ -35,8 +35,9 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   **Új kiadásnál** a `docs/firmware/` fájljait és a `docs/manifest.json` nevét/verzióját is frissíteni kell. Az oldal
   angolul és magyarul (a böngésző nyelve szerint, váltható).
 - A kód megjegyzései, a felület szövegei, a Napló üzenetei és a commit üzenetek **magyarul**, ékezetesen.
-- A commit üzenet formája: `vX.Y: <a változás lényege>` (az első nyilvános kiadás a v1.0); a verziószámot a `FW_NAME`-ben
-  (`idojaras_11_web.ino`, programnév: „Ecowitt Weather Display vX.Y”) is át kell írni.
+- A commit üzenet formája: `vX.Y.Z: <a változás lényege>` (az első nyilvános kiadás a v1.0); a verziószám
+  `vX.Y.Z` (2026.10.17., a felhasználó döntése): kis javításnál a Z nő (v1.0.1), új funkciónál az Y (v1.1); a verziószámot a `FW_NAME`-ben
+  (`idojaras_11_web.ino`, programnév: „Ecowitt Weather Display vX.Y.Z”) is át kell írni.
 
 ## Fordítás, feltöltés
 
@@ -150,12 +151,12 @@ a PSRAM-ot használja. Nagy új foglalást PSRAM-ba tegyél (`MALLOC_CAP_SPIRAM`
 - Két gépen folyik a fejlesztés (Mac és Windows): munka előtt `git pull --ff-only`, a végén `git push origin main --tags`.
   Az eszközre egyszerre csak az egyik gépről, mindig a legfrissebb kódból tölts fel.
 - Menet: módosítás → `pio run` és `pio run -e idojaras_p4` (mindkettő 0 figyelmeztetés) → OTA-feltöltés mindkét kijelzőre → ellenőrzés a kezelőoldalon („Futó program:” (angolul „Running firmware:”) sor)
-  → a felhasználó kipróbálja → ha jóváhagyta: commit `vX.Y: ...`, `git tag vX.Y`, push.
+  → a felhasználó kipróbálja → ha jóváhagyta: commit `vX.Y.Z: ...`, `git tag vX.Y.Z`, push.
 - OTA parancssorból (ha nincs jelszó beállítva a kezelőoldalon):
-  `curl -F "firmware=@idojaras-vX.Y.bin" "http://idojaras.local/update?size=<bájt>"` (a P4-re ugyanígy az
-  `idojaras-p4-vX.Y.bin`, az `idojaras-p4.local`-ra); utána a „Futó program:” (angolul „Running firmware:”) sort ellenőrizd.
+  `curl -F "firmware=@idojaras-vX.Y.Z.bin" "http://idojaras.local/update?size=<bájt>"` (a P4-re ugyanígy az
+  `idojaras-p4-vX.Y.Z.bin`, az `idojaras-p4.local`-ra); utána a „Futó program:” (angolul „Running firmware:”) sort ellenőrizd.
   Ha a kezelőoldalon jelszó van, a nevében ne jelentkezz be: a `.bin`-t készítsd elő, a felhasználó tölti fel böngészőből.
-- A projektmappában csak az aktuális `idojaras-vX.Y.bin` és `idojaras-vX.Y.elf` maradjon (mindkettő gitignore-os);
+- A projektmappában csak az aktuális `idojaras-vX.Y.Z.bin` és `idojaras-vX.Y.Z.elf` maradjon (mindkettő gitignore-os);
   az `.elf` kell az összeomlás visszafejtéséhez.
 
 ## Tapasztalatok, buktatók
@@ -206,7 +207,7 @@ a PSRAM-ot használja. Nagy új foglalást PSRAM-ba tegyél (`MALLOC_CAP_SPIRAM`
   olvass, ha tényleg kell. Az USB-s feltöltéshez az Arduino IDE soros monitorát be kell zárni (foglalja a portot).
 - A Mac USB-portjáról táplálva a kijelző induláskor elakadhat (kevés áram); üzemszerűen a saját tápjáról menjen.
 - Összeomlás visszafejtése: a kezelőoldal Diagnosztika részének címei az adott verzió `.elf`-jével:
-  `xtensa-esp-elf-addr2line -pfiaC -e idojaras-vX.Y.elf <címek>` (a PlatformIO `toolchain-xtensa-esp-elf/bin` mappájából).
+  `xtensa-esp-elf-addr2line -pfiaC -e idojaras-vX.Y.Z.elf <címek>` (a PlatformIO `toolchain-xtensa-esp-elf/bin` mappájából).
 
 **Külső szolgáltatások**
 - Open-Meteo: néha átmeneti HTTP 503 → hiba után 1 perc múlva újrapróbál (3-szor), utána 5 percenként. A lekérés
@@ -230,7 +231,7 @@ a felület a teljes 1280x800-at kihasználja.
 - Mindkét környezetnek van `custom_sdkconfig`-ja, ezért a pioarduino a környezetek közti váltáskor újratelepíti a
   keretrendszert, és az ESP-IDF könyvtárait újrafordítja („Reinstall Arduino framework”, „Compile Arduino IDF libs”,
   kb. 3-4 perc), és törli a másik `.pio/build/<env>` mappáját: a `.bin`-t/`.elf`-et közvetlenül a saját fordítása után
-  kell kimásolni (P4: `idojaras-p4-vX.Y.bin`). A hibrid fordítás fő komponense a `.dummy/` mappa (a tárolóban van, lásd
+  kell kimásolni (P4: `idojaras-p4-vX.Y.Z.bin`). A hibrid fordítás fő komponense a `.dummy/` mappa (a tárolóban van, lásd
   „Kék villanás”).
 - Fordítás: `pio run -e idojaras_p4`, feltöltés: `pio run -e idojaras_p4 -t upload --upload-port /dev/cu.usbmodem…`
   (a lap natív USB-portja, a kapcsolási rajzon USB2/„Full Speed USB”), vagy OTA: `http://idojaras-p4.local/`
@@ -269,11 +270,17 @@ a felület a teljes 1280x800-at kihasználja.
     (`p4_rtc_read/write`, `p4/kijelzo_p4.c`). Induláskor ebből jön az idő (`p4_hw_setup()`), így WiFi és NTP nélkül
     is pontos az óra, és az előzmény azonnal betöltődik; az NTP-szinkron után (`sntp_set_time_sync_notification_cb`,
     óránként) visszaírjuk. Az óra VLF-jelzője (lemerült gombelem / még nem volt beállítva) esetén nem használjuk.
+    **Gombelem nélkül** (vagy lemerült elemmel) az óra a táp kimaradásakor elfelejti az időt: induláskor nincs idő,
+    mint a 7B-n (NTP-re vár, addig nincs előzmény-betöltés és előrejelzés); az NTP után beállítjuk, és tápon jár tovább.
   - **Akku:** Li-akku, az IP5306 tölti; a feszültsége a GPIO52-n (68k/100k osztó, `analogReadMilliVolts` x 1,68),
     2 mp-enként. A kezelőoldalon „Akku:” sor (feszültség, becsült %, hálózati táp / akkuról megy, 10 perces min-max);
     akkuról menet a fejlécben „Akkuról megy: NN %”. Értesítés (a „Lemerülő / hiányzó elem” jelölővel együtt):
     „Áramszünet”, „Újra van táp” (mennyi ideig ment akkuról), „Lemerül az akku” (3,5 V alatt). Az ntfy-téma a P4-en
     alapból üres: ha kell, ott is be kell állítani.
+  - **Akku nélküli lap** (v1.0.1, a felhasználó kérése): ha a mért feszültség 2,5 V alatti, vagy két minta között
+    0,25 V-nál többet ugrik (az IP5306 akku nélkül ki-be kapcsolhatja a töltést), „nincs akku” (`batt_none`): a
+    kezelőoldalon „nincs akku (mért: … V)”, a Rendszer fülön „Akku: nincs”, és nincs áramszünet- / lemerülés-értesítés.
+    10 perc ilyen mérés nélkül újra figyel (utólag betett akku). Akku nélkül még nem volt kipróbálva (mit mér a GPIO52).
   - **Mérések (2026.10.15.):** hálózati tápon, teli akkuval 4,12 V (10 percig állandó), töltés közben 4,18-4,19 V;
     akkuról 30 mp alatt 4,05 V, 1 perc alatt 3,97 V, utána lassabban esik; visszadugva 20 mp alatt 4,12 V.
     Felismerés: akkuról megy, ha 2 percen belül 0,07 V-ot esik, vagy 4,10 V alatt 0,03 V-ot (`BATT_*`); visszajött
