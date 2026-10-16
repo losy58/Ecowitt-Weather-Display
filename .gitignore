@@ -1,0 +1,11 @@
+build/
+.DS_Store
+*.zip
+.pio/
+.vscode/
+managed_components/
+sdkconfig.defaults
+sdkconfig.idojaras
+*.bin
+*.elf
+sdkconfig.idojaras_p4

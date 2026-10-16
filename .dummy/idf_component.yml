@@ -1,0 +1,24 @@
+dependencies:
+  # Required IDF version
+  idf: ">=5.1"
+  espressif/cmake_utilities:
+    version: "0.*"
+    rules:
+      - if: "target == esp32c2"
+  espressif/fb_gfx:
+    version: "master"
+    path: components/fb_gfx
+    git: https://github.com/espressif/esp32-arduino-lib-builder.git
+    require: public
+    rules:
+      - if: "target in [esp32, esp32s2, esp32s3, esp32p4]"
+  # P4 (platformio.ini [env:idojaras_p4], custom_sdkconfig): a WiFi-chippel (ESP32-C6, ESP-Hosted) beszélő komponensek a
+  # gyári Arduino-keretrendszerrel azonos verzión maradjanak, különben a WiFi nem indul (esp_wifi_init 0x102)
+  espressif/esp_hosted:
+    version: "==2.12.13"
+    rules:
+      - if: "target == esp32p4"
+  espressif/esp_wifi_remote:
+    version: "==1.6.4"
+    rules:
+      - if: "target == esp32p4"
