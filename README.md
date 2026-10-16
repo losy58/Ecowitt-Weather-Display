@@ -87,7 +87,9 @@ Ready-made firmware files are attached to each [release](https://github.com/losy
 | `…-P4-ota.bin` | Guition JC8012P4A1C | update of a running display on its web page (*Firmware frissítés*) |
 
 **First installation** (USB cable to the display's USB port):
-- in the browser, without installing anything: open [ESP Tool](https://espressif.github.io/esptool-js/) in Chrome
+- easiest: open the **[web installer](https://losy58.github.io/Ecowitt-Weather-Display/)** in Chrome or Edge and click *Install*; it picks the right firmware
+  for the display automatically;
+- or in the browser with [ESP Tool](https://espressif.github.io/esptool-js/) in Chrome
   or Edge, *Connect*, choose the display's port, add the `factory.bin` file at flash address **`0x0`**, *Program*;
 - or with [esptool](https://docs.espressif.com/projects/esptool/): `esptool --chip esp32s3 write-flash 0x0 <file>`
   (7B) or `esptool --chip esp32p4 write-flash 0x0 <file>` (P4).

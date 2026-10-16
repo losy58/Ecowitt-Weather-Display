@@ -28,6 +28,12 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   `…-P4-ota.bin`, mellé `SHA256SUMS.txt`. Menet: mindkét környezet fordítása a commitolt kódból, címke (`vX.Y`) a
   commitra, `gh release create vX.Y --verify-tag --title "Ecowitt Weather Display vX.Y" --notes-file … <fájlok>`
   (a jegyzet magyarul és angolul).
+- **Webes telepítő** (2026.10.16.): https://losy58.github.io/Ecowitt-Weather-Display/ (GitHub Pages a `main` ág `docs/`
+  mappájából). ESP Web Tools (10.4.0, unpkg-ről): egy „Install / Telepítés” gomb, a lapka alapján választ
+  (`docs/manifest.json`: `ESP32-S3` → 7B, `ESP32-P4` → P4, a teljes kép a `0x0` címre). A böngésző csak ugyanarról
+  az oldalról tölthet, ezért a két `factory.bin` a `docs/firmware/`-ben is benne van (a `.gitignore` kivétele).
+  **Új kiadásnál** a `docs/firmware/` fájljait és a `docs/manifest.json` nevét/verzióját is frissíteni kell. Az oldal
+  angolul és magyarul (a böngésző nyelve szerint, váltható).
 - A kód megjegyzései, a felület szövegei, a Napló üzenetei és a commit üzenetek **magyarul**, ékezetesen.
 - A commit üzenet formája: `vX.Y: <a változás lényege>` (az első nyilvános kiadás a v1.0); a verziószámot a `FW_NAME`-ben
   (`idojaras_11_web.ino`, programnév: „Ecowitt Weather Display vX.Y”) is át kell írni.

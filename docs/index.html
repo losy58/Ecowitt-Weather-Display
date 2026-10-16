@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ecowitt Weather Display – Installer</title>
+<meta name="description" content="Install the Ecowitt Weather Display firmware from the browser over USB.">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+  :root { --bg: #121212; --card: #1e1e1e; --text: #e8e8e8; --muted: #a8a8a8; --accent: #ff8a3d; --line: #333; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.8rem; margin: 8px 0 4px; }
+  h2 { font-size: 1.2rem; margin: 28px 0 8px; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+  img.hero { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); margin: 16px 0 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin: 20px 0; }
+  .lang { float: right; margin-top: 10px; }
+  .lang button { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; }
+  .lang button.on { color: var(--text); border-color: var(--accent); }
+  esp-web-install-button { display: inline-block; margin: 8px 0 4px; }
+  esp-web-install-button button[slot="activate"] { background: var(--accent); color: #000; border: 0; border-radius: 8px; padding: 12px 22px; font: 600 1.05rem system-ui, sans-serif; cursor: pointer; }
+  .warn { border-left: 4px solid var(--accent); padding-left: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+  td, th { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  [data-l="hu"] { display: none; }
+  body.hu [data-l="hu"] { display: block; }
+  body.hu [data-l="en"] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="lang"><button id="b-en">English</button> <button id="b-hu">Magyar</button></div>
+  <h1>Ecowitt Weather Display</h1>
+
+  <div data-l="en">
+    <p class="muted">Touchscreen weather display for Ecowitt stations – local, no cloud. Firmware v1.0.</p>
+  </div>
+  <div data-l="hu">
+    <p class="muted">Érintőképernyős időjárás-kijelző Ecowitt állomásokhoz – helyben, felhő nélkül. Program: v1.0.</p>
+  </div>
+
+  <img class="hero" src="kepek/dashboard.jpg" alt="Dashboard / Főoldal">
+
+  <div class="card">
+    <div data-l="en">
+      <h2 style="margin-top:0">Install from the browser</h2>
+      <p>Connect the display to this computer with a USB cable, then click the button and choose the display's port.
+        The right firmware is selected automatically from the chip.</p>
+    </div>
+    <div data-l="hu">
+      <h2 style="margin-top:0">Telepítés a böngészőből</h2>
+      <p>Csatlakoztasd a kijelzőt USB-kábellel ehhez a géphez, kattints a gombra, és válaszd ki a kijelző portját.
+        A megfelelő programot a lapka alapján magától választja ki.</p>
+    </div>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Install / Telepítés</button>
+      <span slot="unsupported"><p>Your browser does not support Web Serial: use Chrome or Edge on a computer. /
+        A böngésződ nem támogatja a Web Serialt: használj Chrome-ot vagy Edge-et számítógépen.</p></span>
+      <span slot="not-allowed"><p>The page must be opened over HTTPS. / Az oldalt HTTPS-en kell megnyitni.</p></span>
+    </esp-web-install-button>
+    <div data-l="en">
+      <p class="warn">The installation writes the complete firmware and <b>clears the stored settings</b> (WiFi, location, …).
+        Use it for the first installation. A running display is updated on its own web page instead (keeps everything):
+        upload the <code>…-ota.bin</code> file from the <a href="https://github.com/losy58/Ecowitt-Weather-Display/releases/latest">release</a>.</p>
+    </div>
+    <div data-l="hu">
+      <p class="warn">A telepítés a teljes programot felírja, és <b>törli a tárolt beállításokat</b> (WiFi, hely, …): az első
+        telepítéshez való. A működő kijelzőt inkább a saját webes kezelőoldalán frissítsd (mindent megtart): a
+        <a href="https://github.com/losy58/Ecowitt-Weather-Display/releases/latest">kiadás</a> <code>…-ota.bin</code> fájlját kell feltölteni.</p>
+    </div>
+  </div>
+
+  <div data-l="en">
+    <h2>Supported displays</h2>
+    <table>
+      <tr><th>Display</th><th>Chip</th><th>Resolution</th></tr>
+      <tr><td>Waveshare ESP32-S3-Touch-LCD-7B (7")</td><td>ESP32-S3, 16 MB flash, 8 MB PSRAM</td><td>1024x600</td></tr>
+      <tr><td>Guition JC8012P4A1C_I_W_Y (10.1")</td><td>ESP32-P4 (chip revision v3) + ESP32-C6</td><td>1280x800</td></tr>
+    </table>
+    <p class="muted">Any ESP32-S3 board gets the Waveshare 7B firmware, which only works on that display.</p>
+    <h2>After installing</h2>
+    <ol>
+      <li>The display opens the <b>Weather-Setup</b> WiFi network: connect with a phone and choose your network.</li>
+      <li>Open the display's web page (the address is shown in its top line) and set the location and the rooms.</li>
+      <li>In the Ecowitt app (<i>Weather Services → Customized</i>): protocol Ecowitt, the display's IP address, path
+        <code>/ecowitt</code>, port 80.</li>
+    </ol>
+    <p>Details, building from source and the source code: <a href="https://github.com/losy58/Ecowitt-Weather-Display">GitHub</a> (GPL-3.0).</p>
+  </div>
+  <div data-l="hu">
+    <h2>Támogatott kijelzők</h2>
+    <table>
+      <tr><th>Kijelző</th><th>Lapka</th><th>Felbontás</th></tr>
+      <tr><td>Waveshare ESP32-S3-Touch-LCD-7B (7")</td><td>ESP32-S3, 16 MB flash, 8 MB PSRAM</td><td>1024x600</td></tr>
+      <tr><td>Guition JC8012P4A1C_I_W_Y (10,1")</td><td>ESP32-P4 (v3-as lapka) + ESP32-C6</td><td>1280x800</td></tr>
+    </table>
+    <p class="muted">Bármely ESP32-S3-as lap a Waveshare 7B programját kapja, ami csak azon a kijelzőn működik.</p>
+    <h2>Telepítés után</h2>
+    <ol>
+      <li>A kijelző elindítja a <b>Weather-Setup</b> WiFi-hálózatot: csatlakozz rá telefonnal, és válaszd ki a hálózatodat.</li>
+      <li>Nyisd meg a kijelző webes kezelőoldalát (a címe a kijelző felső sorában látszik), és állítsd be a helyet és a helyiségeket.</li>
+      <li>Az Ecowitt-appban (<i>Weather Services → Customized</i>): Ecowitt protokoll, a kijelző IP-címe, útvonal
+        <code>/ecowitt</code>, port 80.</li>
+    </ol>
+    <p>Részletek, fordítás forrásból és a forráskód: <a href="https://github.com/losy58/Ecowitt-Weather-Display/blob/main/README.hu.md">GitHub</a> (GPL-3.0).</p>
+  </div>
+</main>
+<script>
+  (function () {
+    function set(l) {
+      document.body.classList.toggle('hu', l === 'hu');
+      document.documentElement.lang = l;
+      document.getElementById('b-en').classList.toggle('on', l !== 'hu');
+      document.getElementById('b-hu').classList.toggle('on', l === 'hu');
+      try { localStorage.setItem('lang', l); } catch (e) {}
+    }
+    var l = null;
+    try { l = localStorage.getItem('lang'); } catch (e) {}
+    if (!l) l = (navigator.language || '').toLowerCase().indexOf('hu') === 0 ? 'hu' : 'en';
+    set(l);
+    document.getElementById('b-en').onclick = function () { set('en'); };
+    document.getElementById('b-hu').onclick = function () { set('hu'); };
+  })();
+</script>
+</body>
+</html>

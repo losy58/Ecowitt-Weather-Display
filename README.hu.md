@@ -88,7 +88,9 @@ A kész programfájlok minden [kiadáshoz](https://github.com/losy58/Ecowitt-Wea
 | `…-P4-ota.bin` | Guition JC8012P4A1C | a működő kijelző frissítése a webes kezelőoldalon (Firmware frissítés) |
 
 **Első telepítés** (USB-kábellel a kijelző USB-portjára):
-- böngészőből, telepítés nélkül: Chrome-ban vagy Edge-ben nyisd meg az [ESP Tool](https://espressif.github.io/esptool-js/)
+- a legegyszerűbb: Chrome-ban vagy Edge-ben nyisd meg a **[webes telepítőt](https://losy58.github.io/Ecowitt-Weather-Display/)**, és kattints a *Telepítés* gombra;
+  a kijelzőnek megfelelő programot magától választja ki;
+- vagy böngészőből, kézzel: Chrome-ban vagy Edge-ben nyisd meg az [ESP Tool](https://espressif.github.io/esptool-js/)
   oldalt, *Connect*, válaszd ki a kijelző portját, a `factory.bin` fájlt a **`0x0`** címre add meg, *Program*;
 - vagy [esptool](https://docs.espressif.com/projects/esptool/)-lal: `esptool --chip esp32s3 write-flash 0x0 <fájl>`
   (7B), ill. `esptool --chip esp32p4 write-flash 0x0 <fájl>` (P4).

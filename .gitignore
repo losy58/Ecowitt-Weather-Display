@@ -9,3 +9,4 @@ sdkconfig.idojaras
 *.bin
 *.elf
 sdkconfig.idojaras_p4
+!docs/firmware/*.bin
