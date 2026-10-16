@@ -195,6 +195,8 @@ a PSRAM-ot használja. Nagy új foglalást PSRAM-ba tegyél (`MALLOC_CAP_SPIRAM`
 - Új típus (`struct`/`enum`), amely függvény paraméterében szerepel, csak az `idojaras.ino`-ba kerülhet (a prototípusok elé).
 - Mutatót visszaadó függvényhez (pl. `static const char *f()`) a PlatformIO nem mindig készít prototípust: ha korábbi
   fájlból hívod, az `idojaras.ino`-ban előre deklarálni kell.
+- A Mac Minin a tárolók 2026.10.16. óta a `~/GitHub`-ban vannak, az iCloudon kívül (a régi `~/Documents/GitHub`
+  szimbolikus link rá). Ha egy gépen mégis iCloud alatt van:
 - Macen a `~/Documents` iCloud-szinkronizált lehet: félbeszakadt fordítás után `idojaras.ino 2.cpp` jellegű ütközési
   másolatok maradhatnak a mappában – ezek generált fájlok, törölhetők. Ágváltás után az iCloud a forrásfájlokról is
   készíthet ilyen másolatot (`idojaras_17d_bemutato 2.ino`, `p4/kijelzo_p4 2.c`); a fordítás ilyenkor „redefinition” /
