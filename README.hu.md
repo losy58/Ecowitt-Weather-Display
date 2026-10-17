@@ -66,7 +66,9 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
 
 **Csak a P4-en:** a lap saját órája (RX8025T, gombelemmel) WiFi nélkül is pontos időt ad; a Li-akku feszültsége
 látszik, és áramszünetről értesítést küld; hangjelzés, amikor megjelenik a „Szellőztess” (be/ki, hangerő; az éjszakai
-mód időszakában csendben).
+mód időszakában csendben); **automatikus fényerő a beépített kamerával**: a kijelző a szoba fényéhez igazodik, ha
+10 percig senki sem mozog előtte, elsötétül, és mozgásra felébred (a kép nem kerül ki a lapról, nem mentődik; be/ki
+a kezelőoldalon).
 
 ## Szükséges eszközök
 
@@ -75,6 +77,14 @@ mód időszakában csendben).
   kinti érzékelőnek pl. WS90. Más Ecowitt-eszköz is működhet, ha ugyanazokat a mezőket küldi (a konzolok nyers adatai
   a kezelőoldal `/raw` lapján látszanak).
 - 2,4 GHz-es WiFi.
+
+## Asztali támasz
+
+3D-nyomtatható asztali támasz a Guition JC8012P4A1C-hez (10,1"):
+[Desk Stand for Guition JC8012P4A1C 10.1" ESP32-P4 Display](https://makerworld.com/hu/models/3451581-guition-jc8012p4a1c-10-1-desk-stand) a MakerWorldön. Az STL ebben a tárolóban is megvan:
+[docs/desk-stand/desk-stand-ecowitt.stl](docs/desk-stand/desk-stand-ecowitt.stl).
+
+<img src="docs/kepek/desk-stand.jpg" alt="A P4-es kijelző a 3D-nyomtatott asztali támaszban" width="600">
 
 ## Telepítés fordítás nélkül
 

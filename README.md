@@ -65,7 +65,9 @@ Photos of the display in demo mode (made-up data, English interface).
 
 **P4 only:** the board's RTC (RX8025T with coin cell) keeps time without WiFi; the Li battery voltage is shown and a
 notification is sent on power loss; a sound alert when "ventilate" appears (on/off, volume; silent during the night
-mode period).
+mode period); **automatic brightness with the built-in camera**: the display follows the room's light, dims when
+nobody has moved in front of it for 10 minutes and wakes up on movement (the image never leaves the board and is
+not saved; on/off on the web page).
 
 ## Requirements
 
@@ -74,6 +76,14 @@ mode period).
   outdoor sensor such as the WS90. Other Ecowitt devices may work if they send the same fields (the raw data of each
   console is shown on the `/raw` page).
 - 2.4 GHz WiFi.
+
+## Desk stand
+
+A 3D-printable desk stand for the Guition JC8012P4A1C (10.1"):
+[Desk Stand for Guition JC8012P4A1C 10.1" ESP32-P4 Display](https://makerworld.com/hu/models/3451581-guition-jc8012p4a1c-10-1-desk-stand) on MakerWorld. The STL is also in this repository:
+[docs/desk-stand/desk-stand-ecowitt.stl](docs/desk-stand/desk-stand-ecowitt.stl).
+
+<img src="docs/kepek/desk-stand.jpg" alt="The P4 display in the 3D-printed desk stand" width="600">
 
 ## Installing without building
 
