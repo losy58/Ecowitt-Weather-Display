@@ -105,10 +105,18 @@ static bool cam_set_exp_gain(int exp, int gain) {
   return ok;
 }
 
-// a kép vége (megszakításból): ha a mi pufferünkbe érkezett, szól a feladatnak
+// Minden kép a saját pufferünkbe kerül (a meghajtó tartalékpuffere ki van kapcsolva, lásd p4_cam_init()):
+// a következő kép helye (megszakításból, a kép végén és indításkor)
+static bool IRAM_ATTR on_new_trans(esp_cam_ctlr_handle_t h, esp_cam_ctlr_trans_t *t, void *ud) {
+  t->buffer = s_buf;
+  t->buflen = s_buf_len;
+  return false;
+}
+
+// a kép vége (megszakításból): szól a feladatnak
 static bool IRAM_ATTR on_frame(esp_cam_ctlr_handle_t h, esp_cam_ctlr_trans_t *t, void *ud) {
   BaseType_t w = pdFALSE;
-  if (t->buffer == s_buf) xSemaphoreGiveFromISR(s_frame, &w);
+  xSemaphoreGiveFromISR(s_frame, &w);
   return w == pdTRUE;
 }
 
@@ -173,9 +181,9 @@ static void cam_worker(void *arg) {
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(CAM_PERIOD_MS));
     if (s_pause) { prev_ok = false; skip = 1; continue; }
-    esp_cam_ctlr_trans_t t = { .buffer = s_buf, .buflen = s_buf_len };
+    // a következő kép vége: utána kb. 215 ms-ig (a képek közti szünetben) nem ír a DMA a pufferbe
     xSemaphoreTake(s_frame, 0);
-    if (esp_cam_ctlr_receive(s_csi, &t, 100) != ESP_OK || xSemaphoreTake(s_frame, pdMS_TO_TICKS(2000)) != pdTRUE) {
+    if (xSemaphoreTake(s_frame, pdMS_TO_TICKS(2000)) != pdTRUE) {
       if (s_pause) continue;   // közben megállt a képfolyam: nem hiba
       portENTER_CRITICAL(&s_mux);
       s_st.errors++;
@@ -241,6 +249,10 @@ bool p4_cam_init(void (*log)(const char *msg)) {
     .input_data_color_type = CAM_CTLR_COLOR_RAW10,
     .output_data_color_type = CAM_CTLR_COLOR_RAW8,
     .queue_items = 1,
+    // A meghajtó saját tartalékpuffere ki: azt a kimeneti (8 bites) mérethez foglalja (2,07 MB), a DMA viszont a
+    // bemeneti (10 bites) méretet (2,59 MB) írja bele; a túlírás felülírta a szomszédos PSRAM-ot (2026.10.17. este:
+    // az akkumérés ADC-adatai sérültek, összeomlás). Minden kép a saját, 10 bites méretű pufferünkbe megy.
+    .bk_buffer_dis = 1,
   };
   if ((e = esp_cam_new_csi_ctlr(&cc, &s_csi)) != ESP_OK) return fail(log, "Kamera: CSI hiba", e);
 
@@ -260,10 +272,10 @@ bool p4_cam_init(void (*log)(const char *msg)) {
   if ((e = esp_isp_new_processor(&ic, &s_isp)) != ESP_OK) return fail(log, "Kamera: ISP hiba", e);
   if ((e = esp_isp_enable(s_isp)) != ESP_OK) return fail(log, "Kamera: ISP indítási hiba", e);
   s_frame = xSemaphoreCreateBinary();
-  s_buf_len = CAM_W * CAM_H * 10 / 8;   // a 10 bites méret: így biztosan elfér
+  s_buf_len = CAM_W * CAM_H * 10 / 8;   // a 10 bites méret: a DMA ennyit ír (lásd fent)
   s_buf = esp_cam_ctlr_alloc_buffer(s_csi, s_buf_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
   if (!s_frame || !s_buf) return fail(log, "Kamera: nincs memória", 0);
-  esp_cam_ctlr_evt_cbs_t cbs = { .on_trans_finished = on_frame };
+  esp_cam_ctlr_evt_cbs_t cbs = { .on_get_new_trans = on_new_trans, .on_trans_finished = on_frame };
   if ((e = esp_cam_ctlr_register_event_callbacks(s_csi, &cbs, NULL)) != ESP_OK) return fail(log, "Kamera: CSI-callback hiba", e);
   if ((e = esp_cam_ctlr_enable(s_csi)) != ESP_OK) return fail(log, "Kamera: CSI engedélyezési hiba", e);
   if ((e = esp_cam_ctlr_start(s_csi)) != ESP_OK) return fail(log, "Kamera: CSI indítási hiba", e);

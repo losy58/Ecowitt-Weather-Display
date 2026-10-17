@@ -353,11 +353,12 @@ a felület a teljes 1280x800-at kihasználja.
     hiányzó arány gyöke). A kép nem kerül ki a lapról, nem mentődik. A kezelőoldalon „Kamera:” sor (fényérték, mozgás,
     automatikus fényerő); indítási hibánál az ESP-IDF első hibaüzenete is látszik.
   - Fényerő (`cam_brightness()`, `idojaras_17e`; NVS `cfg`/`cam`, alapból be, csak a webes Beállításokban): a simított
-    fényérték szerint az éjszakai (`CAM_L_DARK` = 0,005 alatt) és a nappali fényerő (`CAM_L_BRIGHT` = 0,3 fölött)
+    fényérték szerint az éjszakai (`CAM_L_DARK` = 0,0009 alatt) és a nappali fényerő (`CAM_L_BRIGHT` = 0,3 fölött)
     között, logaritmikusan. `CAM_IDLE_S` (10 perc) mozgás és érintés nélkül: az éjszakai fényerőre sötétül
     („senki sincs előtte”), mozgásra vagy érintésre felébred; alvó kijelzőn az első érintés nem lapoz. Bekapcsolva ez
     váltja ki az éjszakai mód időzítését (a hangjelzés csendes időszaka marad). Mérve: délelőtt, borús időben a szobában
-    0,04-0,35; 0,047-nél (17 %, 2 / 100 % éjszakai / nappali fényerővel) a felhasználónak jó volt.
+    0,04-0,35, este lámpafénynél 0,021, lámpa nélkül 0,0001. A felhasználó kérése (3 / 100 % éjszakai / nappali
+    fényerővel): lámpafénynél 20 % legyen (v1.1.1; előtte 0,005 volt a sötét határ, és ott 11 % jött ki).
   - **Buktató: flash-írás alatt a kamerának állnia kell.** A kijelző `LCD_DSI_ISR_CACHE_SAFE`-je miatt a GDMA
     megszakítása flash-írás alatt is fut, és ha ekkor ér véget egy kép, a CSI-meghajtó a PSRAM-ban lévő pufferen
     cache-műveletet végez: összeomlás (`ipc0`, `spi_flash_op_block_func`, ok 25 = cache-hiba; két OTA közben is). Ezért
@@ -365,7 +366,16 @@ a felület a teljes 1280x800-at kihasználja.
     OTA-nál `p4_cam_pause()`. A szünet: előbb a CSI-vezérlő áll le (`esp_cam_ctlr_stop`), utána a kamera; folytatás
     fordítva. Ha csak a kamera állt le, a DMA egy félkész képen ragadt, és utána nem jött több kép. **Új mentésnél
     (NVS, FFat) a `CamPause`-t nem szabad kihagyni.** Általános horog nincs (az esp_flash a `spi_flash_guard`-ot
-    megkerüli).
+    megkerüli). A flash-*olvasás* is kikapcsolja a cache-t (pl. a NVS-olvasás a kezelőoldal minden betöltésekor:
+    `wifiTxName()`); ez rövid, eddig nem okozott gondot, de elvben ugyanaz a kockázat.
+  - **Buktató: a CSI-meghajtó tartalékpuffere kicsi** (v1.1.1). A meghajtó a saját tartalékpufferét (ahová akkor ír,
+    ha nincs kiadott puffer) a *kimeneti* képmérethez foglalja (RAW8: 2,07 MB), a DMA-átvitel méretét viszont a
+    *bemeneti* méretből számolja (RAW10: 2,59 MB). A túlírás felülírta a szomszédos PSRAM-ot: 2026.10.17. este az
+    akkumérés ADC-adatai sérültek (`0x10111110`: sötét képadat), és az `analogReadMilliVolts` `assert`-tel leállt
+    (`loopTask`, ok 2). Ezért `bk_buffer_dis = 1`, és az `on_get_new_trans` mindig a saját, 10 bites méretű pufferünket
+    adja; a feladat a kép végére vár (a képek közti kb. 215 ms szünetben olvas). A coredump USB-n kiolvasható
+    (`esptool read_flash 0xFF0000 0x10000`), és a `esp-coredump --chip esp32p4 info_corefile -t raw` mutatja a teljes
+    hívási láncot (a PATH-on kell a `tool-riscv32-esp-elf-gdb/bin`).
   - `custom_sdkconfig`: `CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE=y` (enélkül a CSI-meghajtó a PSRAM-ba foglal, és a
     GDMA elutasítja: „user context not in internal RAM”). A WiFi-komponensek rögzítése maradt (2.12.13 / 1.6.4).
   - Kamera nélküli (vagy nem válaszoló) lapon a `p4_cam_init()` az azonosító olvasásánál feladja: nincs automatikus

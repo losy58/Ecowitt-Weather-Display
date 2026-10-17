@@ -257,8 +257,10 @@ constexpr int  WAKE_SECONDS           = 15;    // éjszaka érintésre ennyi ide
 // P4: automatikus fényerő a kamerával (cfg.cam_on, idojaras_17e): a szoba fénye (a kamera simított fényértéke) szerint az
 // éjszakai és a nappali fényerő között; CAM_L_DARK alatt az éjszakai, CAM_L_BRIGHT fölött a nappali, köztük
 // logaritmikusan. Ha CAM_IDLE_S ideig senki sem mozog a kijelző előtt (és érintés sincs), az éjszakai fényerőre sötétül.
-// (A fényérték mérve 2026.10.17. délelőtt, borús időben, a szobában: 0,1-0,35.)
-constexpr float CAM_L_DARK = 0.005f, CAM_L_BRIGHT = 0.3f;
+// (Mérve 2026.10.17.: délelőtt, borús időben a szobában 0,04-0,35; este lámpafénynél 0,021, lámpa nélkül 0,0001.
+// A felhasználó kérése: lámpafénynél (0,021) 20 % legyen, 3 / 100 % éjszakai / nappali fényerővel; ehhez a sötét
+// határ 0,0009, és így a délelőtti 0,047-nél kb. 33 %.)
+constexpr float CAM_L_DARK = 0.0009f, CAM_L_BRIGHT = 0.3f;
 constexpr uint32_t CAM_IDLE_S = 600;
 constexpr bool TOUCH_SWIPE_INVERT     = false; // true: az ujjhúzás iránya fordítva lapoz
 // Hely és időzóna: a frissítő oldalon (vagy a WiFi-beállító portálon) adható meg, a "cfg" NVS-névtérben tárolva.
