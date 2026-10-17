@@ -262,6 +262,7 @@ static void settings_close() {
   bl_preview_until = 0;
   if (st_night_dirty) cfg_save_night();
   if (st_tz_dirty) {
+    CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
     Preferences p;
     p.begin("cfg", false);
     p.putString("tz", st_tz);
@@ -270,6 +271,7 @@ static void settings_close() {
   double la = 0, lo = 0;
   bool empty;
   if (st_loc_dirty && st_loc_valid(&la, &lo, &empty)) {
+    CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
     Preferences p;
     p.begin("cfg", false);
     if (empty) { p.remove("lat"); p.remove("lon"); }

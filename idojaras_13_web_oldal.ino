@@ -164,6 +164,8 @@ static void handle_update_page() {
 #if KIJELZO_P4
   h += tr("<p>Akku: ", "<p>Battery: ");
   h += batt_text();
+  h += tr("</p><p>Kamera: ", "</p><p>Camera: ");
+  h += cam_text();
   h += "</p>";
 #endif
   if (g_demo) h += tr("<p style='color:#ffd54f'><b>Bemutató mód:</b> a kijelző kitalált adatokat mutat, a konzolok adatait nem használja, "
@@ -217,6 +219,9 @@ static void handle_update_upload() {
     if (!ota_auth_ok()) { ota_err = tr("hibás jelszó", "wrong password"); return; }
     ota_total = (size_t)cur_srv->arg("size").toInt();
     ota_screen(tr("Firmware frissítés", "Firmware update"), tr("Ne kapcsold ki a készüléket!", "Do not switch off the device!"), 0);
+#if KIJELZO_P4
+    p4_cam_pause(true);   // P4: a kamera képfolyama a frissítés alatt áll (siker után úgyis újraindul)
+#endif
     if (!Update.begin(ota_total ? ota_total : UPDATE_SIZE_UNKNOWN)) ota_err = Update.errorString();
   } else if (up.status == UPLOAD_FILE_WRITE) {
     if (ota_err.length()) return;
@@ -233,12 +238,24 @@ static void handle_update_upload() {
       ota_screen(tr("Firmware frissítés", "Firmware update"), b, pct);
     }
   } else if (up.status == UPLOAD_FILE_END) {
-    if (ota_err.length()) { Update.abort(); return; }
+    if (ota_err.length()) {
+      Update.abort();
+#if KIJELZO_P4
+      p4_cam_pause(false);
+#endif
+      return;
+    }
     if (Update.end(true)) ota_ok = true;
     else ota_err = Update.errorString();
+#if KIJELZO_P4
+    if (!ota_ok) p4_cam_pause(false);
+#endif
   } else if (up.status == UPLOAD_FILE_ABORTED) {
     Update.abort();
     ota_err = tr("megszakadt a feltöltés", "the upload was interrupted");
+#if KIJELZO_P4
+    p4_cam_pause(false);
+#endif
   }
 }
 

@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 // Firmware-frissítés a böngészőből: http://idojaras.local/ vagy http://<a lap IP-je>/  (.bin feltöltése)
 // ---------------------------------------------------------------------------
-static const char *FW_NAME = "Ecowitt Weather Display v1.0.1" FW_BOARD;
+static const char *FW_NAME = "Ecowitt Weather Display v1.1.0" FW_BOARD;
 static const char *MDNS_NAME = MDNS_HOST;   // a név a hálózaton (kijelzo.h): idojaras.local, ill. idojaras-p4.local
 
 static lv_obj_t *ota_ov = NULL, *ota_l1 = NULL, *ota_l2 = NULL, *ota_fill = NULL;
@@ -102,6 +102,7 @@ static void handle_settings_save() {
     return;
   }
   if (clear_loc || !cfg.has_loc || lat != cfg.lat || lon != cfg.lon) { fc.valid = false; fc_force = true; }   // új hely: új előrejelzés
+  CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
   p.begin("cfg", false);
   if (clear_loc) { p.remove("lat"); p.remove("lon"); }
@@ -126,6 +127,7 @@ static void handle_settings_save() {
     if (t.isEmpty() || nt_topic_valid(t.c_str())) {
       strlcpy(cfg.nt_topic, t.c_str(), sizeof(cfg.nt_topic));
       cfg.nt_mask = mask;
+      CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
       Preferences np;
       np.begin("cfg", false);
       np.putString("nt_t", cfg.nt_topic);
@@ -139,6 +141,15 @@ static void handle_settings_save() {
     if (cur_srv->hasArg("sndv")) cfg.snd_vol = constrain((int)cur_srv->arg("sndv").toInt(), 0, 2);
     snd_save();
   }
+  // automatikus fényerő a kamerával (P4; mint a hangjelzésnél, a rejtett cam_f jelzi, hogy a mező az űrlapon volt)
+  if (cur_srv->hasArg("cam_f")) {
+    cfg.cam_on = cur_srv->hasArg("cam");
+    CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
+    Preferences cp;
+    cp.begin("cfg", false);
+    cp.putBool("cam", cfg.cam_on);
+    cp.end();
+  }
   // továbbküldés másik kijelzőre (a http:// előtag és a záró / elhagyható)
   if (cur_srv->hasArg("fw_h")) {
     String h = cur_srv->arg("fw_h"); h.trim();
@@ -147,6 +158,7 @@ static void handle_settings_save() {
     if (h.isEmpty() || fw_host_valid(h.c_str())) {
       cfg.fw_on = cur_srv->hasArg("fw_on");
       strlcpy(cfg.fw_host, h.c_str(), sizeof(cfg.fw_host));
+      CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
       Preferences fp;
       fp.begin("cfg", false);
       fp.putBool("fw_on", cfg.fw_on);
@@ -170,6 +182,7 @@ static void handle_settings_save() {
       rooms[i].low_v = lv;
     }
     if (changed) {
+      CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
       Preferences rp;
       rp.begin("cfg", false);
       for (int i = 0; i < ROOM_COUNT; i++) {
@@ -382,6 +395,27 @@ static String settings_html() {
   h += nb;
   h += tr("<p style='color:#aaa;margin:0'>A kijelzőn is állítható (az időpontok 15 perces lépésekben): a főoldalon az órára koppintva.</p>",
           "<p style='color:#aaa;margin:0'>Also adjustable on the display (times in 15-minute steps): tap the clock on the main page.</p>");
+#if KIJELZO_P4
+  h += "<input type='hidden' name='cam_f' value='1'><label style='display:block'><input type='checkbox' name='cam'";
+  if (cfg.cam_on) h += " checked";
+  h += " style='width:auto;margin:0 8px 0 0'>";
+  h += tr("Automatikus fényerő a kamerával</label><p style='color:#aaa;margin:0'>A kijelző fénye a szoba fényéhez igazodik, "
+          "az éjszakai (sötétben) és a nappali fényerő (világosban) között; ha 10 percig senki sem mozog előtte, az éjszakai "
+          "fényerőre sötétül, mozgásra vagy érintésre felébred. Bekapcsolva ez veszi át az éjszakai mód időzítésének szerepét. "
+          "A kamera képe nem kerül ki a kijelzőből, nem mentődik.</p>",
+          "Automatic brightness with the camera</label><p style='color:#aaa;margin:0'>The display follows the room's light, "
+          "between the night (dark) and day (bright) brightness; if nobody moves in front of it for 10 minutes, it dims to "
+          "the night brightness and wakes up on movement or touch. When on, it replaces the night mode schedule. "
+          "The camera image never leaves the display and is not saved.</p>");
+  {
+    p4_cam_stat_t c;
+    p4_cam_get(&c);
+    if (!c.ok) h += tr("<p style='color:#ffd54f;margin:0'>A kamera most nem működik (lásd fent, a „Kamera:” sorban), ezért az "
+                       "éjszakai mód érvényes.</p>",
+                       "<p style='color:#ffd54f;margin:0'>The camera is not working now (see the \"Camera:\" line above), so the "
+                       "night mode applies.</p>");
+  }
+#endif
   h += ntfy_html();
 #if KIJELZO_P4
   h += tr("<h3>Hangjelzés</h3>", "<h3>Sound alert</h3>");

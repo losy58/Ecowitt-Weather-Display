@@ -52,6 +52,7 @@ static void diag_init() {
   cur.cause = (rst_magic == RST_MAGIC) ? (uint8_t)rst_cause : RC_NONE;
   rst_magic = 0;
 
+  CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
   p.begin("diag", false);
   p.getBytes("boots", boots, sizeof(boots));
@@ -102,6 +103,7 @@ static void diag_task() {
   if (now < 1600000000) return;
   boot_time_saved = true;
   boots[0].t = (uint32_t)(now - millis() / 1000);
+  CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
   p.begin("diag", false);
   p.putBytes("boots", boots, sizeof(boots));
@@ -153,7 +155,10 @@ static String diag_html() {
 
 static void handle_clear_crash() {
   if (!ota_auth_ok()) { request_auth(); return; }
-  esp_core_dump_image_erase();
+  {
+    CamPause cam_pause_;   // P4: a kamera áll a flash-törlés alatt
+    esp_core_dump_image_erase();
+  }
   crash_html = "";
   LogOut.println("Összeomlás-adat törölve");
   cur_srv->sendHeader("Location", "/");

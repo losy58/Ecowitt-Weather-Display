@@ -75,6 +75,65 @@ static const char *batt_text() {
   return b;
 }
 
+// Automatikus fényerő a kamerával (cfg.cam_on; lásd CAM_L_DARK az idojaras.ino-ban). A backlight_task()-ból hívva
+// (40 ms-onként). Jelenlét: mozgás a kamera előtt vagy érintés; CAM_IDLE_S ideig egyik sem: az éjszakai fényerő.
+static bool cam_away = false;    // senki sincs a kijelző előtt (elsötétült)
+static int cam_pct = -1;         // a fény szerinti fényerő (a jelenléttől függetlenül; a kezelőoldalra is)
+
+static int cam_brightness() {
+  static uint32_t seen_ms = 0;
+  static bool seen_init = false;
+  if (!cfg.cam_on || g_demo) { cam_away = false; cam_pct = -1; return -1; }
+  p4_cam_stat_t c;
+  p4_cam_get(&c);
+  if (!c.ok || c.light_avg <= 0.0f) { cam_away = false; cam_pct = -1; return -1; }
+  if (!seen_init || c.motion_age_s < 2 || is_awake()) { seen_ms = millis(); seen_init = true; }
+  const bool away = millis() - seen_ms >= CAM_IDLE_S * 1000UL;
+  if (away != cam_away) {
+    cam_away = away;
+    LogOut.println(away ? "Kamera: senki sincs a kijelző előtt, sötétítés" : "Kamera: mozgás a kijelző előtt, ébresztés");
+  }
+  // a fény szerinti fényerő: logaritmikusan az éjszakai és a nappali között (ahogy a szem érzékeli)
+  float t = (logf(c.light_avg) - logf(CAM_L_DARK)) / (logf(CAM_L_BRIGHT) - logf(CAM_L_DARK));
+  t = t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
+  const int lo = min(cfg.n_pct, cfg.d_pct), hi = max(cfg.n_pct, cfg.d_pct);
+  const int pct = (int)lroundf(lo * powf((float)hi / lo, t));
+  if (cam_pct < 0 || abs(pct - cam_pct) >= 2 || pct == lo || pct == hi) cam_pct = pct;   // a kis ingadozás ne látsszon
+  return cam_away ? cfg.n_pct : cam_pct;
+}
+
+static bool cam_asleep() { return cam_away; }
+
+// a kamera mérései a kezelőoldalra (a kép nem kerül ki a lapról)
+static const char *cam_text() {
+  static char b[400];
+  p4_cam_stat_t c;
+  p4_cam_get(&c);
+  if (!c.ok) {
+    const char *e = strncmp(c.err, "Kamera: ", 8) == 0 ? c.err + 8 : c.err;   // a Napló üzenete, a "Kamera: " nélkül
+    snprintf(b, sizeof(b), tr("nem működik: %s", "not working: %s"), e[0] ? e : tr("nem indult", "not started"));
+    return b;
+  }
+  if (!c.frames) {
+    snprintf(b, sizeof(b), tr("indul... (%u kép elmaradt)", "starting... (%u frames missed)"), (unsigned)c.errors);
+    return b;
+  }
+  char ago[48];
+  if (c.motion_age_s == UINT32_MAX) strlcpy(ago, tr("még nem volt", "none yet"), sizeof(ago));
+  else snprintf(ago, sizeof(ago), tr("%u mp-e", "%u s ago"), (unsigned)c.motion_age_s);
+  char auto_s[96];
+  if (!cfg.cam_on) strlcpy(auto_s, tr("automatikus fényerő: kikapcsolva", "automatic brightness: off"), sizeof(auto_s));
+  else if (cam_pct < 0) strlcpy(auto_s, tr("automatikus fényerő: még nincs mérés", "automatic brightness: no reading yet"), sizeof(auto_s));
+  else if (cam_away) snprintf(auto_s, sizeof(auto_s), tr("senki sincs előtte: %d %%", "nobody in front: %d %%"), cfg.n_pct);
+  else snprintf(auto_s, sizeof(auto_s), tr("automatikus fényerő: %d %%", "automatic brightness: %d %%"), cam_pct);
+  snprintf(b, sizeof(b), tr("fényérték %.3g (simítva %.3g; világosság %d, expozíció %.1f ms, erősítés %.1fx); mozgás %.1f %%, "
+                            "utoljára %s; %s; %u kép, %u elmaradt",
+                            "light value %.3g (smoothed %.3g; brightness %d, exposure %.1f ms, gain %.1fx); motion %.1f %%, "
+                            "last %s; %s; %u frames, %u missed"),
+           c.light, c.light_avg, c.mean, c.exp_ms, c.gain, c.motion, ago, auto_s, (unsigned)c.frames, (unsigned)c.errors);
+  return b;
+}
+
 // Az app_setup()-ból (az érintés után, az időzóna beállítása után, a WiFi előtt)
 static void p4_hw_setup() {
   sntp_set_time_sync_notification_cb(rtc_sntp_cb);
@@ -192,6 +251,9 @@ static void p4_hw_task() {
 }
 
 #else
+static int cam_brightness() { return -1; }
+static bool cam_asleep() { return false; }
+static const char *cam_text() { return ""; }
 static const char *batt_text() { return ""; }
 static const char *batt_short() { return ""; }
 static void p4_hw_setup() {}

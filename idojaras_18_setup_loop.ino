@@ -192,6 +192,9 @@ void app_setup() {
   my_server.on("/wifistatus", HTTP_GET, handle_wifi_status);
   my_server.on("/wifiportal", HTTP_POST, handle_wifi_portal);
   my_server.begin();
+#if KIJELZO_P4
+  if (!g_demo) p4_cam_init(p4_log);   // kamera (fény, jelenlét): a WiFi és a beállító portál (mentésekkel) után
+#endif
   loop_wdt_start();   // innentől a loop() elakadása újraindítást (és összeomlás-mentést) okoz
 }
 

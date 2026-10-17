@@ -1,4 +1,5 @@
 #include "wifi_manager.h"
+#include "kijelzo.h"   // P4: a kamera megállítása flash-írás idejére (p4_cam_pause)
 
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -137,10 +138,16 @@ static void txSave(int i)
 {
     if (i == txSaved())
         return;
+#if KIJELZO_P4
+    p4_cam_pause(true);   // a kamera képfolyama áll a mentés alatt (lásd CamPause az idojaras.ino-ban)
+#endif
     Preferences p;
     p.begin("cfg", false);
     p.putInt("txp", i);
     p.end();
+#if KIJELZO_P4
+    p4_cam_pause(false);
+#endif
 }
 
 // Több hozzáférési pont ugyanazzal a hálózatnévvel (mesh): az ESP32 alapból az elsőként talált AP-ra csatlakozik, ami

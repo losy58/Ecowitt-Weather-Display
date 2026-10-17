@@ -130,7 +130,7 @@ static void touch_task() {
 
   if (touch_down_event) {
     touch_down_event = false;
-    ignore_gesture = is_night() && !is_awake();   // alvó kijelzőnél az első érintés nem lapoz
+    ignore_gesture = (is_night() || cam_asleep()) && !is_awake();   // alvó kijelzőnél az első érintés nem lapoz
     wake_until_ms = millis() + (uint32_t)WAKE_SECONDS * 1000UL;
     page_since = millis();                          // az automatikus visszaugrás időzítője is újraindul
   }

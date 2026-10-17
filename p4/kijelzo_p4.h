@@ -35,6 +35,25 @@ bool p4_rtc_write(int y, int mo, int d, int h, int mi, int s, int wday);
 bool p4_audio_init(void (*log)(const char *msg));
 void p4_beep(float amp);   // amp: 0..1
 
+// Kamera (OV02C10, kamera_p4.c) fény- és mozgásérzékelőként; az érintés buszán, ezért a p4_touch_init() után.
+// A háttérben fél másodpercenként egy képből mér; a kép nem kerül ki a lapról.
+typedef struct {
+  bool ok;               // fut
+  uint32_t frames;       // feldolgozott képek
+  uint32_t errors;       // elmaradt képek
+  int mean;              // a kép átlagos világossága a feketeszint fölött (0..239; a szabályozás 64 körül tartja)
+  float exp_ms;          // expozíciós idő
+  float gain;            // erősítés (1..15,5)
+  float light;           // fényérték = világosság / (expozíció * erősítés): arányos a megvilágítással
+  float light_avg;       // ugyanez simítva (kb. 3 mp); 0: még nincs elég mérés
+  float motion;          // a megváltozott képrészek aránya az előző képhez képest (%)
+  uint32_t motion_age_s; // az utolsó mozgás (legalább 1 %) óta eltelt idő; UINT32_MAX: még nem volt
+  char err[160];          // ha nem indult: miért (mint a Naplóban)
+} p4_cam_stat_t;
+bool p4_cam_init(void (*log)(const char *msg));
+void p4_cam_get(p4_cam_stat_t *st);
+void p4_cam_pause(bool on);   // flash-írás (OTA, előzménymentés) idejére megállítja a képfolyamot; egymásba ágyazható
+
 #ifdef __cplusplus
 }
 #endif

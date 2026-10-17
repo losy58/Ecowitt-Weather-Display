@@ -254,6 +254,12 @@ constexpr bool BACKLIGHT_PWM_INVERTED = true;  // 7B: a PWM-regiszter 0 értéke
 constexpr int  LCD_PCLK_MHZ           = 18;    // a kijelző képpont-órajele (MHz); 18 MHz-en kb. 20 kép/mp
 constexpr size_t INTERNAL_RAM_RESERVE = 150 * 1024;  // ennyi belso RAM maradjon a WiFi-nek
 constexpr int  WAKE_SECONDS           = 15;    // éjszaka érintésre ennyi ideig világít a kijelző, utána újra elalszik
+// P4: automatikus fényerő a kamerával (cfg.cam_on, idojaras_17e): a szoba fénye (a kamera simított fényértéke) szerint az
+// éjszakai és a nappali fényerő között; CAM_L_DARK alatt az éjszakai, CAM_L_BRIGHT fölött a nappali, köztük
+// logaritmikusan. Ha CAM_IDLE_S ideig senki sem mozog a kijelző előtt (és érintés sincs), az éjszakai fényerőre sötétül.
+// (A fényérték mérve 2026.10.17. délelőtt, borús időben, a szobában: 0,1-0,35.)
+constexpr float CAM_L_DARK = 0.005f, CAM_L_BRIGHT = 0.3f;
+constexpr uint32_t CAM_IDLE_S = 600;
 constexpr bool TOUCH_SWIPE_INVERT     = false; // true: az ujjhúzás iránya fordítva lapoz
 // Hely és időzóna: a frissítő oldalon (vagy a WiFi-beállító portálon) adható meg, a "cfg" NVS-névtérben tárolva.
 // Hely nélkül a napkelte/napnyugta "--:--", és a főoldal felső sorában figyelmeztetés látszik.
@@ -262,11 +268,12 @@ constexpr bool TOUCH_SWIPE_INVERT     = false; // true: az ujjhúzás iránya fo
 // n_mode: 0 = óra szerint (n_st..n_en), 1 = napnyugta szerint: napnyugta + n_so perctől napkelte + n_ro percig (hely kell hozzá)
 // nt_topic: az ntfy.sh téma (üres: nincs értesítés); nt_mask: mely értesítések mennek (NT_* bitek)
 // snd_on: P4: hangjelzés, amikor megjelenik a "Szellőztess" (az éjszakai mód időszakában nem); snd_vol: 0 halk, 1 közepes, 2 hangos
+// cam_on: P4: automatikus fényerő a kamerával (a szoba fénye és a jelenlét szerint; lásd CAM_L_DARK)
 // fw_on, fw_host: a konzolok adatainak továbbküldése egy másik kijelzőre (be/ki; cél: gépnév vagy IP, esetleg :port)
 struct Config { bool has_loc; double lat, lon; char tz[64]; char pw[33]; bool n_on; int n_st, n_en, n_pct, d_pct; int n_mode, n_so, n_ro;
-                char nt_topic[65]; int nt_mask; bool fw_on; char fw_host[65]; bool snd_on; int snd_vol; };
+                char nt_topic[65]; int nt_mask; bool fw_on; char fw_host[65]; bool snd_on; int snd_vol; bool cam_on; };
 enum { NT_FROST = 1, NT_RAIN = 2, NT_CO2 = 4, NT_BATT = 8, NT_STALE = 16, NT_CRASH = 32, NT_ALL = 63 };
-static Config cfg = {false, 0.0, 0.0, "", "", true, 22 * 60, 6 * 60, 2, 100, 0, 30, 0, "", NT_ALL, false, "", true, 1};
+static Config cfg = {false, 0.0, 0.0, "", "", true, 22 * 60, 6 * 60, 2, 100, 0, 30, 0, "", NT_ALL, false, "", true, 1, true};
 struct NtMsg { char title[64]; char msg[200]; char tags[24]; uint8_t prio; };   // egy telefonos értesítés (idojaras_17c)
 static bool co2_vent[3] = {};   // helyiségenként: "szellőztess" állapot (hiszterézissel; a felső sor és az értesítés is ezt használja)
 constexpr size_t FW_BODY = 3072;   // egy továbbküldött konzol-küldés legnagyobb mérete (urlencoded)
@@ -287,9 +294,23 @@ static float batt_v = NAN;
 static int batt_pct = -1;
 static bool batt_on = false;
 static const char *batt_text();
+static const char *cam_text();     // a kamera mérései a kezelőoldalra (P4; a 7B-n üres)
+static int cam_brightness();       // P4: a kamera szerinti fényerő (%); -1: nincs (kikapcsolva, nem működik; a 7B-n mindig)
+static bool cam_asleep();          // P4: a kamera szerint senki sincs a kijelző előtt (elsötétült)
 static const char *batt_short();   // a kijelző Rendszer fülére (P4; a 7B-n üres)
 struct DemoVals { float to, rh, p, w, g, dir, sol, rate, ti[3], hi[3], co2[3]; };   // a bemutató egy időpontra számolt értékei
 #define TR2(arr) (arr[g_lang])   // kétnyelvű tömb: arr[0] magyar, arr[1] angol
+
+// P4: amíg él, a kamera képfolyama áll (p4_cam_pause): minden flash-írás (Preferences-mentés, előzmény, OTA) köré kell.
+// A kamera DMA-megszakítása flash-írás közben is fut (a kijelző miatt az egész GDMA "cache-biztos"), és ha ekkor ér véget
+// egy kép, a PSRAM-ban lévő képpufferen végzett cache-művelet összeomlást okoz (2026.10.17.: két OTA közben is,
+// "ipc0", ok 25 = cache-hiba). A Preferences-objektum ELŐTT kell létrehozni, hogy utána szűnjön meg. A 7B-n üres.
+struct CamPause {
+#if KIJELZO_P4
+  CamPause() { p4_cam_pause(true); }
+  ~CamPause() { p4_cam_pause(false); }
+#endif
+};
 
 static void cfg_load() {
   Preferences p;
@@ -312,6 +333,7 @@ static void cfg_load() {
   cfg.fw_on = p.getBool("fw_on", false);
   cfg.snd_on = p.getBool("snd", true);
   cfg.snd_vol = constrain(p.getInt("sndv", 1), 0, 2);
+  cfg.cam_on = p.getBool("cam", true);
   strlcpy(cfg.fw_host, p.getString("fw_h", "").c_str(), sizeof(cfg.fw_host));
   // helyiségek (alapérték: a rooms[] kezdőértéke)
   for (int i = 0; i < ROOM_COUNT; i++) {
@@ -327,6 +349,7 @@ static void cfg_load() {
 }
 
 static void cfg_save_night() {
+  CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
   p.begin("cfg", false);
   p.putBool("n_on", cfg.n_on);
@@ -342,6 +365,7 @@ static void cfg_save_night() {
 
 constexpr float SND_AMP[3] = {0.02f, 0.08f, 0.2f};   // a hangjelzés erőssége: halk, közepes, hangos
 static void snd_save() {   // P4: a hangjelzés be/ki és hangereje
+  CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
   p.begin("cfg", false);
   p.putBool("snd", cfg.snd_on);
@@ -350,6 +374,7 @@ static void snd_save() {   // P4: a hangjelzés be/ki és hangereje
 }
 
 static void lang_save(int lang) {
+  CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
   p.begin("cfg", false);
   p.putInt("lang", lang ? 1 : 0);
@@ -367,6 +392,7 @@ static void lang_load() {
 }
 
 static void demo_save(bool on) {
+  CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
   p.begin("cfg", false);
   p.putBool("demo", on);

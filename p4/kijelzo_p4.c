@@ -197,6 +197,8 @@ bool p4_touch_init(void (*log)(const char *msg)) {
   return true;
 }
 
+i2c_master_bus_handle_t p4_i2c_bus(void) { return s_i2c; }   // a kamera (kamera_p4.c) is ezen a buszon van
+
 bool p4_touch_read(int *x, int *y) {
   if (!s_tp) return false;
   uint16_t tx = 0, ty = 0, strength = 0;

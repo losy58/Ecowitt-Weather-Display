@@ -120,8 +120,8 @@ static void hist_ensure_loaded() {
   update_dashboard();
 }
 
-static void hist_save() {
-  if (g_demo || !hist || !ffat_ok || !hist_loaded || !hist_dirty) return;   // a bemutató adatai nem kerülnek a flash-re
+// az előzmény és a napi összesítő kiírása a flash-re (a hist_save()-ből)
+static void hist_write() {
   File f = FFat.open("/hist.bin", FILE_WRITE);
   if (!f) { LogOut.println("Előzmény: mentés sikertelen (a fájl nem nyitható)"); return; }
   HistFile h;
@@ -137,6 +137,12 @@ static void hist_save() {
   days_save();
   if (ok) hist_dirty = false;
   else LogOut.println("Előzmény: mentés sikertelen (írási hiba)");
+}
+
+static void hist_save() {
+  if (g_demo || !hist || !ffat_ok || !hist_loaded || !hist_dirty) return;   // a bemutató adatai nem kerülnek a flash-re
+  CamPause cam_pause_;   // P4: a kamera képfolyama a flash-írás alatt áll
+  hist_write();
 }
 
 // Új adat érkezett: az aktuális 5 perces szelet frissítése (a lökésnél a szelet maximuma marad)

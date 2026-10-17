@@ -78,6 +78,8 @@ static bool is_awake() {
 
 static int target_brightness() {
   if (bl_preview_until && (int32_t)(bl_preview_until - millis()) > 0) return bl_preview_pct;
+  const int cb = cam_brightness();   // P4, kamerával: a szoba fénye és a jelenlét szerint (az éjszakai időzítés helyett)
+  if (cb >= 0) return cb;
   if (!is_night()) return cfg.d_pct;
   return is_awake() ? cfg.d_pct : cfg.n_pct;
 }

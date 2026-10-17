@@ -73,7 +73,8 @@ egy fordítási egységgé fűzi össze, ezért:
 - `idojaras_02..18_*.ino`: témánként a függvények (kijelző-meghajtó, előzmények, előrejelzés, főoldal, konzolok,
   rajzolás, grafikonok, web, diagnosztika, érintés, fényerő panel, `06b`: a konzolok adatainak továbbküldése másik
   kijelzőre, `17b`: Beállítások képernyő a fogaskerékkel,
-  `17c`: telefonos értesítések az ntfy.sh-n, háttérfeladatból, `17d`: bemutató mód).
+  `17c`: telefonos értesítések az ntfy.sh-n, háttérfeladatból, `17d`: bemutató mód, `17e`: P4: óra, akku, hang,
+  kamerás fényerő).
   A számozás határozza meg a sorrendet (a `17b` a `17_` után jön, mert `_` < `b`);
   egy fájl csak a korábban definiált (vagy előre deklarált) `static` függvényeket használhatja.
 - `idojaras_18_setup_loop.ino`: `create_ui()`, `app_setup()` (kijelző → érintés → FFat → beállítások → WiFi → webszerver
@@ -236,7 +237,8 @@ a felület a teljes 1280x800-at kihasználja.
 - Fordítás: `pio run -e idojaras_p4`, feltöltés: `pio run -e idojaras_p4 -t upload --upload-port /dev/cu.usbmodem…`
   (a lap natív USB-portja, a kapcsolási rajzon USB2/„Full Speed USB”), vagy OTA: `http://idojaras-p4.local/`
   Az mDNS-név `idojaras-p4`, hogy ne ütközzön a 7B-vel; a programnév végén „(P4)”.
-- Kód: `kijelzo.h` (melyik kijelző: `KIJELZO_P4`, `FW_BOARD`), `p4/kijelzo_p4.c/.h` (kijelző, érintés, háttérvilágítás),
+- Kód: `kijelzo.h` (melyik kijelző: `KIJELZO_P4`, `FW_BOARD`), `p4/kijelzo_p4.c/.h` (kijelző, érintés, háttérvilágítás,
+  óra, hang), `p4/kamera_p4.c` (kamera: fény és jelenlét),
   a gyártói meghajtók a `p4/`-ben (`esp_lcd_jd9365`, `esp_lcd_touch`, `esp_lcd_touch_gsl3680`, `gsl_point_id`).
   A `p4/` mappát az Arduino IDE nem fordítja, csak a PlatformIO (`build_src_filter`). Az `.ino`-kban `#if KIJELZO_P4`.
 - **A felület a P4-en 1280x800-as** (2026.10.15.; előtte 1024x600 a kép közepén, fekete kerettel), 90 fokkal
@@ -333,6 +335,45 @@ a felület a teljes 1280x800-at kihasználja.
   16 kHz, 16 bit, MCLK = 256 x fs (MCLK GPIO13, BCLK GPIO12, LRCK GPIO10, adat GPIO9); a regiszterek kézzel (a
   keretrendszerben nincs esp_codec_dev); NS4150 erősítő PA_CTRL = GPIO20, csak lejátszás alatt bekapcsolva; a hangot
   háttérfeladat játssza le (a főciklus nem vár). Hangszóró a CN3-on (`7_CODEC.png`, `3_ESP32-P4.png`).
+
+- **Kamera: automatikus fényerő és jelenlét** (v1.1.0, 2026.10.17., a felhasználó kérése). A lapon előre néző kamera
+  van a fekvő kijelző tetején: **OmniVision OV02C10** (2 MP, MIPI-CSI; FPC5, `4_CONN.png`), az érintés I2C-buszán (0x36),
+  reset/kikapcsoló láb nélkül, saját órajellel.
+  - Meghajtó: `p4/kamera_p4.c`, saját, rövid. A keretrendszer `esp_cam_sensor`-ában (2.4.0) nincs OV02C10, csak a gyártó
+    saját másolatában; abból csak a regiszterlista kell (`p4/ov02c10_1080p_1lane.h`: 1920x1080, RAW10, 1 adatsáv,
+    405 Mbit/s, mint a gyári `video_lcd_display` demóban). Az esp_video (V4L2) helyett közvetlenül a CSI-vezérlő és az
+    ISP (RAW10 → RAW8, színkeverés nélkül), a kép a PSRAM-ba. A képmagasság (VTS) 8730 sor: kb. 4 kép/mp, legfeljebb
+    245 ms expozíció. Az ISP órajele 240 MHz kell (80 MHz-en nem jött kép: a pixelórajel 81 MHz); előbb a CSI-vezérlő,
+    utána az ISP jön létre (mint az esp_video-ban). A kamera az `app_setup()` végén indul (a WiFi és a portál után),
+    bemutató módban nem.
+  - Mérés: háttérfeladat (`cam_worker`, PSRAM-verem), fél másodpercenként egy képből 64x36-os rács. **Fényérték** =
+    világosság / (expozíció * erősítés), logaritmikus mozgóátlaggal simítva (kb. 3 mp). **Mozgás** = az előző rácshoz
+    képest megváltozott cellák aránya; 1 % fölött mozgás (4 méterről is észrevesz; a felhasználónak így jó). Saját
+    expozíció-szabályozás (előbb az idő, utána az analóg erősítés 0x3508, 1x = 0x100), csillapítva (egy lépésben a
+    hiányzó arány gyöke). A kép nem kerül ki a lapról, nem mentődik. A kezelőoldalon „Kamera:” sor (fényérték, mozgás,
+    automatikus fényerő); indítási hibánál az ESP-IDF első hibaüzenete is látszik.
+  - Fényerő (`cam_brightness()`, `idojaras_17e`; NVS `cfg`/`cam`, alapból be, csak a webes Beállításokban): a simított
+    fényérték szerint az éjszakai (`CAM_L_DARK` = 0,005 alatt) és a nappali fényerő (`CAM_L_BRIGHT` = 0,3 fölött)
+    között, logaritmikusan. `CAM_IDLE_S` (10 perc) mozgás és érintés nélkül: az éjszakai fényerőre sötétül
+    („senki sincs előtte”), mozgásra vagy érintésre felébred; alvó kijelzőn az első érintés nem lapoz. Bekapcsolva ez
+    váltja ki az éjszakai mód időzítését (a hangjelzés csendes időszaka marad). Mérve: délelőtt, borús időben a szobában
+    0,04-0,35; 0,047-nél (17 %, 2 / 100 % éjszakai / nappali fényerővel) a felhasználónak jó volt.
+  - **Buktató: flash-írás alatt a kamerának állnia kell.** A kijelző `LCD_DSI_ISR_CACHE_SAFE`-je miatt a GDMA
+    megszakítása flash-írás alatt is fut, és ha ekkor ér véget egy kép, a CSI-meghajtó a PSRAM-ban lévő pufferen
+    cache-műveletet végez: összeomlás (`ipc0`, `spi_flash_op_block_func`, ok 25 = cache-hiba; két OTA közben is). Ezért
+    minden flash-írás köré `CamPause` kell (`idojaras.ino`; a `Preferences` objektum ELÉ), a `wifi_manager.cpp`-ben és az
+    OTA-nál `p4_cam_pause()`. A szünet: előbb a CSI-vezérlő áll le (`esp_cam_ctlr_stop`), utána a kamera; folytatás
+    fordítva. Ha csak a kamera állt le, a DMA egy félkész képen ragadt, és utána nem jött több kép. **Új mentésnél
+    (NVS, FFat) a `CamPause`-t nem szabad kihagyni.** Általános horog nincs (az esp_flash a `spi_flash_guard`-ot
+    megkerüli).
+  - `custom_sdkconfig`: `CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE=y` (enélkül a CSI-meghajtó a PSRAM-ba foglal, és a
+    GDMA elutasítja: „user context not in internal RAM”). A WiFi-komponensek rögzítése maradt (2.12.13 / 1.6.4).
+  - Kamera nélküli (vagy nem válaszoló) lapon a `p4_cam_init()` az azonosító olvasásánál feladja: nincs automatikus
+    fényerő (a régi éjszakai mód érvényes), a `CamPause` nem csinál semmit; a kezelőoldalon „Kamera: nem működik:
+    nincs (vagy nem válaszol…)”, a Beállításokban a kapcsoló mellett figyelmeztetés.
+  - USB-s feltöltés: a natív USB-port (`/dev/cu.usbmodem…`); a lap UART-portján (CH34x, `/dev/cu.usbserial-…`) az
+    esptool nem tud csatlakozni. OTA után a lap az `app1`-ről is indulhat: kézi esptool-feltöltésnél a `boot_app0.bin`-t
+    is írni kell a `0xe000`-ra (az app a `0x10000`-ra).
 
 **Nyitott:** egy WATCHDOG-újraindulás volt (2026.10.14. 23:15, a Mac-ről táplálva, az érintés-hibakeresés közben);
 még nincs kivizsgálva. Töltőről 15 óra alatt nem fordult elő.
