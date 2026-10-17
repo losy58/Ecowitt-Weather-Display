@@ -43,7 +43,8 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
   eső, légnyomás, UV, napsugárzás, óra, napkelte/napnyugta, holdfázis, rövid előrejelzés.
 - **Előrejelzés:** 4 nap és 24 óra az [Open-Meteo](https://open-meteo.com/) alapján (kulcs nem kell, csak a hely).
 - **Grafikonok:** hőmérséklet, légnyomás, szél, eső, benti hőmérséklet és CO2 napi, heti (7 nap, 5 perces minták) és
-  havi (400 napos napi összesítő) nézetben; koppintásra teljes képernyőn.
+  havi (400 napos napi összesítő) nézetben; a hőmérséklet-grafikonon a látható időszak kinti minimuma és maximuma
+  jelölve; koppintásra teljes képernyőn.
 - **Részletes adatok** és **Napló** oldal (a program eseményei).
 - **Több helyiség:** legfeljebb 3 konzol (pl. WS3910, GW3000, WN1821) benti adatai külön; a kinti adat (pl. WS90) az
   elsőtől jön, a többitől csak akkor, ha az első 2 percig hallgat.

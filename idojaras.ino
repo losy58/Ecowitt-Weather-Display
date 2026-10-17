@@ -300,6 +300,7 @@ static const char *cam_text();     // a kamera mérései a kezelőoldalra (P4; a
 static int cam_brightness();       // P4: a kamera szerinti fényerő (%); -1: nincs (kikapcsolva, nem működik; a 7B-n mindig)
 static bool cam_asleep();          // P4: a kamera szerint senki sincs a kijelző előtt (elsötétült)
 static const char *batt_short();   // a kijelző Rendszer fülére (P4; a 7B-n üres)
+struct ExtMark { lv_obj_t *dot, *lbl; };   // a kinti min/max jele a Hőmérséklet grafikonon: pont és felirat (idojaras_10)
 struct DemoVals { float to, rh, p, w, g, dir, sol, rate, ti[3], hi[3], co2[3]; };   // a bemutató egy időpontra számolt értékei
 #define TR2(arr) (arr[g_lang])   // kétnyelvű tömb: arr[0] magyar, arr[1] angol
 

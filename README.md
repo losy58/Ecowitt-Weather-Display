@@ -43,7 +43,8 @@ Photos of the display in demo mode (made-up data, English interface).
   rain, pressure, UV, solar radiation, clock, sunrise/sunset, moon phase, short forecast.
 - **Forecast:** 4 days and 24 hours from [Open-Meteo](https://open-meteo.com/) (no API key, only a location).
 - **Charts:** temperature, pressure, wind, rain, indoor temperature and CO2 in day, week (7 days of 5-minute samples)
-  and month (400-day daily summary) views; tap for full screen.
+  and month (400-day daily summary) views; the outdoor minimum and maximum of the shown period are marked on the
+  temperature chart; tap for full screen.
 - **Details** and **Log** pages.
 - **Several rooms:** indoor data of up to 3 consoles (e.g. WS3910, GW3000, WN1821) shown separately; outdoor data
   (e.g. WS90) comes from the first one, from the others only if the first is silent for 2 minutes.

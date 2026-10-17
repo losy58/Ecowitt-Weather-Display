@@ -74,6 +74,69 @@ static void card_rect(const ChartDef &d, int *x, int *y, int *w) {
   *y = HC_Y0 + d.row_ * (HC_H + HC_GAP);
 }
 
+// ---- A kinti hőmérséklet szélső értékei a Hőmérséklet grafikonon (a felhasználó kérése, 2026.10.17.) ----
+// A látható időszak (a mai nap, 7 nap vagy a hónap) legmagasabb és legalacsonyabb kinti pontján kis jel, mellette
+// az érték; havi nézetben a napi maximumok legmagasabbja és a napi minimumok legalacsonyabbja.
+static ExtMark ch_ext[2] = {}, fs_ext[2] = {};   // [0]: max, [1]: min; a kártyán és a teljes képernyős grafikonon
+constexpr int EXT_DOT = S(10), EXT_GAP = S(5);
+
+static void ext_create(lv_obj_t *parent, ExtMark *m, const lv_font_t *font) {
+  for (int j = 0; j < 2; j++) {
+    m[j].dot = make_shape(parent, 0, 0, EXT_DOT, EXT_DOT, EXT_DOT / 2, 0xFFFFFF);
+    m[j].lbl = dlabel(parent, "", font, 0xFFFFFF, 0, 0);
+    lv_obj_set_hidden(m[j].dot, true);
+    lv_obj_set_hidden(m[j].lbl, true);
+  }
+}
+
+// A jelek helye: chart a grafikon, se a sorozatai, (cx, cy) a grafikon bal felső sarka a szülőben, pw a szülő
+// szélessége; on = false: rejtve. A felirat a maximumnál a pont fölött, a minimumnál alatta; ha ott nem fér el
+// a grafikonon belül, a pont mellett (jobbra, a jobb szélen balra).
+static void ext_place(lv_obj_t *chart, lv_chart_series_t *const *se, int cx, int cy, int pw, ExtMark *m, bool on) {
+  if (!m[0].dot || !chart || !cd) return;
+  const ChartDef &d = CHARTS[HC_TEMP];
+  int at[2] = {-1, -1}, ser[2] = {0, ch_mode == 2 ? 1 : 0};   // havi nézetben a 0. sorozat a napi max, az 1. a napi min
+  int32_t val[2] = {INT32_MIN, INT32_MAX};
+  for (int j = 0; on && j < 2; j++) {
+    const int32_t *a = cd[chf(d, ser[j])];
+    for (int i = 0; i < ch_n(); i++) {
+      if (a[i] == LV_CHART_POINT_NONE) continue;
+      if (j == 0 ? a[i] > val[0] : a[i] < val[1]) { val[j] = a[i]; at[j] = i; }
+    }
+  }
+  if (at[1] >= 0 && val[1] == val[0]) at[1] = -1;   // egyetlen pont vagy vízszintes vonal: csak egy jel
+  lv_obj_update_layout(chart);
+  const int ch = lv_obj_get_content_height(chart);
+  for (int j = 0; j < 2; j++) {
+    const bool show = at[j] >= 0 && se[ser[j]];
+    lv_obj_set_hidden(m[j].dot, !show);
+    lv_obj_set_hidden(m[j].lbl, !show);
+    if (!show) continue;
+    lv_point_t p;
+    lv_chart_get_point_pos_by_id(chart, se[ser[j]], at[j], &p);
+    lv_obj_set_pos(m[j].dot, cx + p.x - EXT_DOT / 2, cy + p.y - EXT_DOT / 2);
+    char b[16];
+    snprintf(b, sizeof(b), "%s %.1f", j ? "min" : "max", val[j] / (float)d.div);
+    set_label_if_changed(m[j].lbl, b);
+    lv_obj_set_size(m[j].lbl, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_update_layout(m[j].lbl);
+    const int tw = lv_obj_get_width(m[j].lbl), lh = lv_obj_get_height(m[j].lbl);
+    int x, y;
+    const int y_out = j ? p.y + EXT_GAP + EXT_DOT / 2 : p.y - EXT_GAP - EXT_DOT / 2 - lh;   // fölötte / alatta
+    if (y_out >= 0 && y_out + lh <= ch) {
+      x = cx + p.x - tw / 2;
+      y = cy + y_out;
+    } else {
+      x = cx + p.x + EXT_DOT / 2 + EXT_GAP;
+      if (x + tw > pw - S(4)) x = cx + p.x - EXT_DOT / 2 - EXT_GAP - tw;
+      y = cy + p.y - lh / 2;
+    }
+    if (x < S(4)) x = S(4);
+    if (x + tw > pw - S(4)) x = pw - S(4) - tw;
+    lv_obj_set_pos(m[j].lbl, x, y);
+  }
+}
+
 // Egy grafikonkártya: cím + sorozatonként az aktuális érték (a sorozat színével) + vonaldiagram + tengelyfeliratok
 static void make_chart_card(int idx) {
   const ChartDef &d = CHARTS[idx];
@@ -117,6 +180,7 @@ static void make_chart_card(int idx) {
   ch_hi[idx] = small_label(card, "", SX(2), HC_CY - S(8), SX(50), LV_TEXT_ALIGN_RIGHT);
   ch_lo[idx] = small_label(card, "", SX(2), HC_CY + HC_CH - S(8), SX(50), LV_TEXT_ALIGN_RIGHT);
   for (int k = 0; k < CH_X_LABELS; k++) ch_x[idx][k] = small_label(card, "", HC_CX, HC_CY + HC_CH + SY(8), SX(60), LV_TEXT_ALIGN_CENTER);
+  if (idx == HC_TEMP) ext_create(card, ch_ext, &font_hu_14);   // a kinti min/max jele (a grafikon fölött)
 }
 
 static int16_t hs_get(const HistSample &e, int f) {
@@ -309,6 +373,7 @@ static void hist_update_charts() {
       set_label_if_changed(ch_v[i][k], b);
     }
   }
+  ext_place(ch_chart[HC_TEMP], ch_se[HC_TEMP], HC_CX, HC_CY, HC_W, ch_ext, true);
   if (fs_idx >= 0) fs_refresh();
 }
 
@@ -406,6 +471,7 @@ static void create_fullscreen_chart() {
     fs_ylab[k] = dlabel_r(card, "", &font_hu_28, COL_GREY, FS_CX - SX(10), FS_CY + (FS_CH - 1) * k / 4 - S(16), SX(84));
   for (int k = 0; k < 7; k++)
     fs_xlab[k] = dlabel_c(card, "", &font_hu_28, COL_GREY, FS_CX - SX(50), FS_CY + FS_CH + SY(12), SX(100));
+  ext_create(card, fs_ext, &font_hu_28);   // a kinti min/max jele (csak a Hőmérséklet grafikonon látszik)
   lv_obj_set_hidden(fs_page, true);
 }
 
@@ -446,6 +512,7 @@ static void fs_refresh() {
     set_label_if_changed(fs_v[k], t);
   }
   lv_chart_refresh(fs_chart);
+  ext_place(fs_chart, fs_se, FS_CX, FS_CY, LCD_H_RES, fs_ext, fs_idx == HC_TEMP);
 }
 
 static void fs_open(int idx) {

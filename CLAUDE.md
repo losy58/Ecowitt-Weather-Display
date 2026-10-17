@@ -21,7 +21,7 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   Előtte ellenőrizve: a kódban és a dokumentációban nincs személyes adat (ntfy-téma, otthoni koordináta, IP, e-mail;
   a képekben EXIF/GPS); az ntfy-témát a felhasználó lecserélte. A Claude-os nyomok (Co-Authored-By sor, `CLAUDE.md`,
   `.claude/`) maradhatnak: nem titok (a felhasználó döntése). Új személyes adat ezután se kerüljön a tárolóba.
-- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0): a felhasználóknak kész programfájlok, fordítás nélkül (README:
+- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0): a felhasználóknak kész programfájlok, fordítás nélkül (README:
   „Telepítés fordítás nélkül”). Kijelzőnként a `.pio/build/<env>/firmware.factory.bin` (első telepítés USB-n a `0x0`
   címre: betöltő – a 7B-n 0x0, a P4-en 0x2000 –, partíciótábla, program; az NVS-t üresre írja, az FFat-et nem érinti)
   és a `firmware.bin` (OTA). Nevük: `Ecowitt-Weather-Display-vX.Y.Z-7B-factory.bin`, `…-7B-ota.bin`, `…-P4-factory.bin`,
@@ -121,6 +121,11 @@ kapcsolható, a kijelzőn: Beállítások / Rendszer / „Bemutató mód...” (
   megjön az NTP-idő (az idő ugrik), az adatok újraszámolódnak;
 - hely nélkül Miskolc (`DEMO_LAT/LON`, nem mentődik: `demo_loc`), alapértelmezett időzóna helyett CET;
 - nincs éjszakai mód (mindig nappali fényerő); a fejlécben „BEMUTATÓ (kitalált adatok)”, a kezelőoldalon figyelmeztetés.
+
+**Grafikonok** (`idojaras_10`): a Hőmérséklet grafikonon a látható időszak (nap / 7 nap / hónap) legmagasabb és
+legalacsonyabb kinti pontján fehér jel és „max …” / „min …” felirat (`ext_place()`, a kártyán és teljes képernyőn;
+havi nézetben a napi maximumok legmagasabbja és a napi minimumok legalacsonyabbja; v1.2.0, a felhasználó kérése).
+A felirat a pont fölött / alatt, ha ott nem fér el a grafikonon belül, mellette.
 
 **Tárolás:**
 - NVS (`Preferences`, `"cfg"` névtér): hely, időzóna, kezelőoldal jelszava, éjszakai mód.
