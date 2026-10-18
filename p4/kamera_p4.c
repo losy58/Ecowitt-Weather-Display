@@ -18,6 +18,7 @@
 #include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
+#include "esp_cache.h"
 #include "driver/i2c_master.h"
 #include "esp_cam_ctlr.h"
 #include "esp_cam_ctlr_csi.h"
@@ -48,6 +49,10 @@ typedef struct { uint16_t reg; uint8_t val; } ov02c10_reginfo_t;
 #define LIGHT_EMA     0.15f      // a simított fényérték (logaritmikus mozgóátlag) súlya: kb. 3 mp alatt követi a változást
 #define GRID_W        64         // a mérőrács: 30x30 képpontos cellák, mindegyik közepén egy 4x4-es folt átlaga
 #define GRID_H        36
+#define CAM_GUARD     (64 * 1024)  // védősáv a képpuffer mögött: ha a DMA mégis túlírna rajta, ezt írja felül, nem a
+                                   // szomszédos foglalást (lásd p4_cam_init()); minden képnél ellenőrizzük
+#define GUARD_PAT     0xA5
+#define CACHE_ALIGN   128          // a cache-sor méreténél nem kisebb igazítás (a puffer és a védősáv cache-művelete)
 
 static i2c_master_dev_handle_t s_cam_i2c = NULL;
 static esp_cam_ctlr_handle_t s_csi = NULL;
@@ -61,6 +66,8 @@ static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 static p4_cam_stat_t s_st;        // a legutóbbi mérés (s_mux alatt)
 static int64_t s_motion_us = 0;   // az utolsó mozgás ideje (0: még nem volt)
 static volatile int s_pause = 0;  // >0: a képfolyam áll (flash-írás alatt; p4_cam_pause)
+static SemaphoreHandle_t s_gap = NULL;  // a p4_cam_pause() erre vár: vége egy képnek (a képek közti szünet eleje)
+static volatile bool s_gap_req = false;
 
 i2c_master_bus_handle_t p4_i2c_bus(void);   // kijelzo_p4.c: az érintés I2C-busza
 
@@ -117,7 +124,25 @@ static bool IRAM_ATTR on_new_trans(esp_cam_ctlr_handle_t h, esp_cam_ctlr_trans_t
 static bool IRAM_ATTR on_frame(esp_cam_ctlr_handle_t h, esp_cam_ctlr_trans_t *t, void *ud) {
   BaseType_t w = pdFALSE;
   xSemaphoreGiveFromISR(s_frame, &w);
+  if (s_gap_req) { s_gap_req = false; xSemaphoreGiveFromISR(s_gap, &w); }
   return w == pdTRUE;
+}
+
+// A védősáv ellenőrzése (a feladatból, a kép vége után): a DMA a cache-t megkerülve ír, ezért előbb érvényteleníteni kell
+// a cache-t; ha bármi nem a mintát tartalmazza, túlírás volt: számoljuk, és újra kitöltjük
+static bool guard_check(void) {
+  uint8_t *g = s_buf + s_buf_len;
+  if (esp_cache_msync(g, CAM_GUARD, ESP_CACHE_MSYNC_FLAG_DIR_M2C) != ESP_OK) return true;
+  const uint32_t pat = GUARD_PAT * 0x01010101u;
+  const uint32_t *w = (const uint32_t *)g;
+  for (int i = 0; i < CAM_GUARD / 4; i++) {
+    if (w[i] != pat) {
+      memset(g, GUARD_PAT, CAM_GUARD);
+      esp_cache_msync(g, CAM_GUARD, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+      return false;
+    }
+  }
+  return true;
 }
 
 // a rács számolása; visszaadja az átlagos világosságot (0..255)
@@ -189,6 +214,11 @@ static void cam_worker(void *arg) {
       s_st.errors++;
       portEXIT_CRITICAL(&s_mux);
       continue;
+    }
+    if (!guard_check()) {
+      portENTER_CRITICAL(&s_mux);
+      s_st.overruns++;
+      portEXIT_CRITICAL(&s_mux);
     }
     const int raw = grid_calc();
     if (skip > 0) { skip--; prev_ok = false; continue; }
@@ -272,17 +302,23 @@ bool p4_cam_init(void (*log)(const char *msg)) {
   if ((e = esp_isp_new_processor(&ic, &s_isp)) != ESP_OK) return fail(log, "Kamera: ISP hiba", e);
   if ((e = esp_isp_enable(s_isp)) != ESP_OK) return fail(log, "Kamera: ISP indítási hiba", e);
   s_frame = xSemaphoreCreateBinary();
+  s_gap = xSemaphoreCreateBinary();
   s_buf_len = CAM_W * CAM_H * 10 / 8;   // a 10 bites méret: a DMA ennyit ír (lásd fent)
-  s_buf = esp_cam_ctlr_alloc_buffer(s_csi, s_buf_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
-  if (!s_frame || !s_buf) return fail(log, "Kamera: nincs memória", 0);
+  // a puffer mögött védősáv (ismert mintával): 2026.10.18-án két összeomlás volt a kamera feladatában, sérült
+  // veremmel; ha a DMA túlírna, a védősávba írjon, és a kezelőoldalon látsszon (overruns)
+  s_buf = heap_caps_aligned_calloc(CACHE_ALIGN, 1, s_buf_len + CAM_GUARD, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
+  if (!s_frame || !s_gap || !s_buf) return fail(log, "Kamera: nincs memória", 0);
+  memset(s_buf + s_buf_len, GUARD_PAT, CAM_GUARD);
+  esp_cache_msync(s_buf + s_buf_len, CAM_GUARD, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
   esp_cam_ctlr_evt_cbs_t cbs = { .on_get_new_trans = on_new_trans, .on_trans_finished = on_frame };
   if ((e = esp_cam_ctlr_register_event_callbacks(s_csi, &cbs, NULL)) != ESP_OK) return fail(log, "Kamera: CSI-callback hiba", e);
   if ((e = esp_cam_ctlr_enable(s_csi)) != ESP_OK) return fail(log, "Kamera: CSI engedélyezési hiba", e);
   if ((e = esp_cam_ctlr_start(s_csi)) != ESP_OK) return fail(log, "Kamera: CSI indítási hiba", e);
   if (!cam_wr(OV02C10_REG_SLEEP_MODE, 0x01)) return fail(log, "Kamera: nem indul a képfolyam", 0);
 
-  if (xTaskCreatePinnedToCoreWithCaps(cam_worker, "kamera", 4096, NULL, 1, NULL, 0,
-                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS)
+  // a verem a belső RAM-ban (4 KB; előtte PSRAM-ban volt, a képpuffer szomszédságában): flash-írás alatt és egy
+  // esetleges DMA-túlírásnál is ép marad
+  if (xTaskCreatePinnedToCore(cam_worker, "kamera", 4096, NULL, 1, NULL, 0) != pdPASS)
     return fail(log, "Kamera: a háttérfeladat nem indult", 0);
   esp_log_set_vprintf(s_old_vprintf);
   s_old_vprintf = NULL;
@@ -292,13 +328,21 @@ bool p4_cam_init(void (*log)(const char *msg)) {
 }
 
 // A képfolyam megállítása flash-írás (OTA, előzménymentés, beállítások) idejére, egymásba ágyazható. Előbb a CSI-vezérlő
-// áll le (azonnal: nincs több DMA és megszakítás), utána a kamera; folytatáskor fordítva, mint induláskor: a vezérlő
+// áll le (nincs több DMA és megszakítás), utána a kamera; folytatáskor fordítva, mint induláskor: a vezérlő
 // friss DMA-val indul, és a kamera egy új kép elejétől küld. (Ha csak a kamera állt le, a DMA egy félkész képen ragadt,
 // és utána nem jött több kép.)
+// A vezérlő csak a képek közti szünetben állhat le: egy kép végét megvárjuk (legfeljebb egy képidő, kb. 250 ms), utána
+// kb. 215 ms-ig nem jön adat, és a megszakítás már beállította a következő átvitelt. Kép közben leállítva (és a
+// megszakítással versenyezve) a DMA néha rossz címre indult újra: 2026.10.18-án kétszer is képadatot írt más feladatok
+// PSRAM-vermébe (összeomlás a 15 percenkénti előzménymentéskor).
 void p4_cam_pause(bool on) {
   if (!s_st.ok) return;
   if (on) {
     if (s_pause++ == 0) {
+      xSemaphoreTake(s_gap, 0);
+      s_gap_req = true;
+      xSemaphoreTake(s_gap, pdMS_TO_TICKS(400));   // ha nem jön kép (elakadt a képfolyam), akkor is leállítjuk
+      s_gap_req = false;
       esp_cam_ctlr_stop(s_csi);
       cam_wr(OV02C10_REG_SLEEP_MODE, 0x00);
     }

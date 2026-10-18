@@ -41,6 +41,7 @@ typedef struct {
   bool ok;               // fut
   uint32_t frames;       // feldolgozott képek
   uint32_t errors;       // elmaradt képek
+  uint32_t overruns;     // a DMA túlírt a képpufferen (a védősávba írt); 0 kell
   int mean;              // a kép átlagos világossága a feketeszint fölött (0..239; a szabályozás 64 körül tartja)
   float exp_ms;          // expozíciós idő
   float gain;            // erősítés (1..15,5)

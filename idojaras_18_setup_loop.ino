@@ -183,6 +183,7 @@ void app_setup() {
   my_server.on("/ecowitt", HTTP_POST, handle_ecowitt_post);
   my_server.on("/ecowitt", HTTP_GET, handle_ecowitt_post);
   my_server.on("/clearcrash", HTTP_POST, handle_clear_crash);
+  my_server.on("/coredump", HTTP_GET, handle_coredump);
   my_server.on("/ntfytest", HTTP_POST, handle_ntfy_test);
 #if KIJELZO_P4
   my_server.on("/beeptest", HTTP_POST, handle_beep_test);

@@ -26,6 +26,7 @@
 #include <WiFiClientSecure.h>
 #include <freertos/idf_additions.h>
 #include <esp_core_dump.h>
+#include <esp_flash.h>
 #include <esp_task_wdt.h>
 #include "wifi_manager.h"
 
@@ -224,6 +225,7 @@ enum { HC_TEMP, HC_PRESS, HC_WIND, HC_RAIN, HC_ITEMP, HC_CO2, HC_COUNT };
 // az előzménymezők (hs_get) sorszáma
 enum { F_TO, F_TI, F_P, F_W, F_G, F_R, F_T2, F_T3, F_C1, F_C3, F_C2, F_COUNT };
 enum { RC_NONE, RC_OTA, RC_PORTAL, RC_PANEL, RC_WIFISET, RC_MANUAL };   // a program saját újraindításainak oka (diagnosztika)
+bool diag_display_failed();   // idojaras_12: a kijelző nem indult (feljegyzi; true: újraindítással újra kell próbálni)
 // a napi összesítők mezői (havi grafikon); a grafikon-adatsorban az indexük F_COUNT + M_*
 // (az M_C2 a végén: így a DaySum mérete nem változott, a régi DAY1 fájl átalakítás nélkül beolvasható)
 enum { M_TMAX, M_TMIN, M_P, M_W, M_G, M_R, M_TI, M_T2, M_T3, M_C1, M_C3, M_C2, M_COUNT };

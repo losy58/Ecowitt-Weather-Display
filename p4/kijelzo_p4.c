@@ -1,6 +1,7 @@
 // Guition JC8012P4A1C (ESP32-P4): kijelző (JD9365, MIPI-DSI), érintés (GSL3680, I2C), háttérvilágítás (PWM)
 // A panel- és érintés-meghajtó a gyártó Arduino-példájából való (esp_lcd_jd9365.c, esp_lcd_gsl3680.c, esp_lcd_touch.c,
 // gsl_point_id.c); a lábkiosztás a gyártó kapcsolási rajzából.
+#include <stdio.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -97,9 +98,15 @@ bool p4_display_init(int ui_w, int ui_h, void (*log)(const char *msg)) {
     .bits_per_pixel = 16,
     .vendor_config = &vendor_cfg,
   };
-  if (esp_lcd_new_panel_jd9365(io, &panel_cfg, &s_panel) != ESP_OK ||
-      esp_lcd_panel_reset(s_panel) != ESP_OK || esp_lcd_panel_init(s_panel) != ESP_OK) {
-    logmsg(log, "Kijelző: a JD9365 panel nem indult");
+  // a panel_init() elején a meghajtó kiolvassa a panel azonosítóját: ha a panel nem válaszol (pl. a táp
+  // rádugásakor ingadozó feszültség után), itt hibát kapunk, és a hívó újraindítja a lapot
+  esp_err_t e = esp_lcd_new_panel_jd9365(io, &panel_cfg, &s_panel);
+  if (e == ESP_OK) e = esp_lcd_panel_reset(s_panel);
+  if (e == ESP_OK) e = esp_lcd_panel_init(s_panel);
+  if (e != ESP_OK) {
+    char m[96];
+    snprintf(m, sizeof(m), "Kijelző: a JD9365 panel nem indult (%s)", esp_err_to_name(e));
+    logmsg(log, m);
     return false;
   }
   esp_lcd_panel_mirror(s_panel, true, true);   // mint a gyártó példájában

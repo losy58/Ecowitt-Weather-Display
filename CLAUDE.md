@@ -135,7 +135,7 @@ A felirat a pont fölött / alatt, ha ott nem fér el a grafikonon belül, melle
 - Diagnosztika: az utolsó indulások oka és a coredump partícióba mentett összeomlás (`idojaras_12_diagnosztika.ino`).
 
 **Webes végpontok** (`app_setup()`): `/` és `/update` (kezelőoldal + OTA), `/settings`, `/raw` (konzolok nyers adatai),
-`/ecowitt` (adatfogadás; `?fwd=1`: továbbküldött adat), `/clearcrash`, `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`. mDNS név: `idojaras`.
+`/ecowitt` (adatfogadás; `?fwd=1`: továbbküldött adat), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`. mDNS név: `idojaras`.
 
 **Memória:** a belső RAM szűkös (`INTERNAL_RAM_RESERVE` marad a WiFi-nek); a nagy pufferek, az LVGL és az mbedTLS
 a PSRAM-ot használja. Nagy új foglalást PSRAM-ba tegyél (`MALLOC_CAP_SPIRAM`).
@@ -381,6 +381,15 @@ a felület a teljes 1280x800-at kihasználja.
     adja; a feladat a kép végére vár (a képek közti kb. 215 ms szünetben olvas). A coredump USB-n kiolvasható
     (`esptool read_flash 0xFF0000 0x10000`), és a `esp-coredump --chip esp32p4 info_corefile -t raw` mutatja a teljes
     hívási láncot (a PATH-on kell a `tool-riscv32-esp-elf-gdb/bin`).
+  - **Buktató: a CSI-vezérlő csak a képek közti szünetben állhat le** (v1.2.2). A `p4_cam_pause()` egy kép végét
+    megvárja (`s_gap`, legfeljebb 400 ms), és csak utána hívja az `esp_cam_ctlr_stop()`-ot. Kép közben leállítva (a
+    megszakítással versenyezve) a DMA néha rossz címre indult újra: 2026.10.18-án kétszer képadat (0x0f-0x13, a
+    feketeszint) került az `fc` és `ntfy` feladat PSRAM-vermébe, összeomlás a „kamera” feladatban (PC 0x20000000, minden
+    regiszter 0), pontosan a 15 percenkénti előzménymentéskor. A kamera feladatának verme azóta belső RAM-ban van, a
+    képpuffer mögött 64 KB-os védősáv (ha a DMA túlír, a kezelőoldalon „DMA-túlírás: N”).
+  - Összeomlás-adat USB nélkül: `curl -o coredump.bin http://idojaras-p4.local/coredump`; a fájl 24. bájtjától ELF
+    core (`tail -c +25`), `riscv32-esp-elf-gdb <a verzió .elf-je> core.elf`; vagy
+    `python -m esp_coredump --chip esp32p4 info_corefile -t raw -c coredump.bin <elf>`.
   - `custom_sdkconfig`: `CONFIG_CAM_CTLR_MIPI_CSI_ISR_CACHE_SAFE=y` (enélkül a CSI-meghajtó a PSRAM-ba foglal, és a
     GDMA elutasítja: „user context not in internal RAM”). A WiFi-komponensek rögzítése maradt (2.12.13 / 1.6.4).
   - Kamera nélküli (vagy nem válaszoló) lapon a `p4_cam_init()` az azonosító olvasásánál feladja: nincs automatikus
@@ -390,5 +399,17 @@ a felület a teljes 1280x800-at kihasználja.
     esptool nem tud csatlakozni. OTA után a lap az `app1`-ről is indulhat: kézi esptool-feltöltésnél a `boot_app0.bin`-t
     is írni kell a `0xe000`-ra (az app a `0x10000`-ra).
 
-**Nyitott:** egy WATCHDOG-újraindulás volt (2026.10.14. 23:15, a Mac-ről táplálva, az érintés-hibakeresés közben);
-még nincs kivizsgálva. Töltőről 15 óra alatt nem fordult elő.
+- **Kijelző nem indul** (v1.2.2): ha a JD9365 panel induláskor nem válaszol (a meghajtó a `panel_init()`-ben kiolvassa
+  az azonosítóját), a program 2 mp múlva újraindítja a lapot (`RC_PANEL`), legfeljebb 3-szor egymás után
+  (`panel_tries`, RTC-memória); a kezelőoldalon az indulás mellett „– a kijelző nem indult” (`BootRec.flags`).
+
+**Nyitott:**
+- Egy WATCHDOG-újraindulás volt (2026.10.14. 23:15, a Mac-ről táplálva, az érintés-hibakeresés közben);
+  még nincs kivizsgálva. Töltőről 15 óra alatt nem fordult elő.
+- **2026.10.18. 17:47, a P4 másik tápra dugásakor** (egy „okos” töltőre; 14:21-kor egy másikra dugva FESZÜLTSÉGESÉS):
+  villanás, megszakítás-watchdog (ok 24 = `Interrupt wdt timeout on CPU0`; a 0. mag az `IDLE0`-ban, a
+  `esp_cpu_wait_for_intr()`-ben várt, nem jött óraütés; a saját kód egyik szálban sem szerepelt), utána az
+  újraindulás eljutott a főciklusig, de a kép fekete maradt, **világító háttérrel** (tehát a `p4_display_init()`
+  sikeres volt: a v1.2.2-es újrapróbálás ezt nem fogja meg). Táp ki/be után rendben. Ugyanazon a tápon öt ki-be
+  dugásnál nem jött elő. Feltevés: a panel a rádugáskor ingadozó feszültségtől elvesztette a beállításait. Lehetséges
+  javítás: a panel állapotának olvasása (DCS `0x0A`, power mode) induláskor és időnként, hibánál a panel újraindítása.

@@ -131,6 +131,10 @@ static const char *cam_text() {
                             "light value %.3g (smoothed %.3g; brightness %d, exposure %.1f ms, gain %.1fx); motion %.1f %%, "
                             "last %s; %s; %u frames, %u missed"),
            c.light, c.light_avg, c.mean, c.exp_ms, c.gain, c.motion, ago, auto_s, (unsigned)c.frames, (unsigned)c.errors);
+  if (c.overruns) {
+    const size_t n = strlen(b);
+    snprintf(b + n, sizeof(b) - n, tr("; <b>DMA-túlírás: %u</b>", "; <b>DMA overrun: %u</b>"), (unsigned)c.overruns);
+  }
   return b;
 }
 

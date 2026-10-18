@@ -232,7 +232,16 @@ void init_display() {
 
 #if KIJELZO_P4
   // JC8012P4A1C: a panelt és a háttérvilágítást a p4/kijelzo_p4.c indítja; a rajzolás a disp_flush()-ból oda megy
-  if (!p4_display_init(LCD_H_RES, LCD_V_RES, p4_log)) LogOut.println("Kijelző HIBA - a webes kezelőoldal ettől még működik");
+  if (!p4_display_init(LCD_H_RES, LCD_V_RES, p4_log)) {
+    // pl. a táp rádugásakor ingadozó feszültség után: a panel csak újraindítással jön vissza (néhányszor próbáljuk)
+    if (diag_display_failed()) {
+      LogOut.println("Kijelző HIBA - újraindítás");
+      delay(2000);   // a táp addig talán megnyugszik
+      diag_mark_restart(RC_PANEL);
+      ESP.restart();
+    }
+    LogOut.println("Kijelző HIBA - a webes kezelőoldal ettől még működik");
+  }
   esp_lcd_panel_handle_t panel_handle = NULL;
 #else
   esp_lcd_rgb_panel_config_t panel_config = {};

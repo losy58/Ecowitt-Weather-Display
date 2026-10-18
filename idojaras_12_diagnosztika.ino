@@ -8,8 +8,11 @@
 constexpr int BOOT_HIST = 6;
 constexpr uint32_t RST_MAGIC = 0x52535431;            // "RST1"
 constexpr uint32_t LOOP_WDT_MS = 60000;               // ha a loop() ennyi ideig nem fut le, újraindulás (és coredump)
-struct BootRec { uint32_t t; uint8_t reason, cause; uint16_t pad; };
+struct BootRec { uint32_t t; uint8_t reason, cause; uint16_t flags; };
+constexpr uint16_t BOOT_F_DISPLAY = 1;                // ennél az indulásnál nem indult el a kijelző
+constexpr uint32_t PANEL_TRIES = 3;                   // ha a kijelző nem indul, legfeljebb ennyi újraindítás egymás után
 RTC_NOINIT_ATTR static uint32_t rst_magic, rst_cause; // újraindítás előtt beírjuk, a következő induláskor kiolvassuk
+RTC_NOINIT_ATTR static uint32_t panel_tries;          // a kijelző miatti újraindítások egymás után (csak RC_PANEL után érvényes)
 static BootRec boots[BOOT_HIST] = {};
 static bool boot_time_saved = false;
 static String crash_html;                             // a mentett összeomlás leírása (üres: nincs)
@@ -51,6 +54,7 @@ static void diag_init() {
   cur.reason = (uint8_t)esp_reset_reason();
   cur.cause = (rst_magic == RST_MAGIC) ? (uint8_t)rst_cause : RC_NONE;
   rst_magic = 0;
+  if (cur.cause != RC_PANEL) panel_tries = 0;
 
   CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
@@ -110,6 +114,22 @@ static void diag_task() {
   p.end();
 }
 
+// a kijelző nem indult: az indulás mellé feljegyezzük (a kezelőoldalon látszik); true: újraindítással újra kell
+// próbálni (legfeljebb PANEL_TRIES-szor egymás után, hogy ne induljon újra végtelenül)
+bool diag_display_failed() {
+  boots[0].flags |= BOOT_F_DISPLAY;
+  {
+    CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
+    Preferences p;
+    p.begin("diag", false);
+    p.putBytes("boots", boots, sizeof(boots));
+    p.end();
+  }
+  if (panel_tries >= PANEL_TRIES) return false;
+  panel_tries++;
+  return true;
+}
+
 // a fő program (loop) watchdogja: setup() végén kapcsoljuk be, a loop() minden körben "eteti"
 static bool loop_wdt_on = false;   // előtte az esp_task_wdt_reset() hibát naplózna (a P4-en minden hívásnál)
 static void loop_wdt_start() {
@@ -127,15 +147,16 @@ static String diag_html() {
   for (int i = 0; i < BOOT_HIST; i++) {
     const BootRec &r = boots[i];
     if (i > 0 && !r.t && !r.reason) break;
-    char b[120];
+    char b[160];
+    const char *disp = (r.flags & BOOT_F_DISPLAY) ? tr(" – a kijelző nem indult", " – the display failed to start") : "";
     if (r.t > 1600000000) {
       time_t t = r.t;
       struct tm lt;
       localtime_r(&t, &lt);
-      snprintf(b, sizeof(b), "%04d.%02d.%02d %02d:%02d - %s<br>", lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min,
-               reset_text(r.reason, r.cause));
+      snprintf(b, sizeof(b), "%04d.%02d.%02d %02d:%02d - %s%s<br>", lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min,
+               reset_text(r.reason, r.cause), disp);
     } else {
-      snprintf(b, sizeof(b), tr("(időpont nélkül) - %s<br>", "(no time) - %s<br>"), reset_text(r.reason, r.cause));
+      snprintf(b, sizeof(b), tr("(időpont nélkül) - %s%s<br>", "(no time) - %s%s<br>"), reset_text(r.reason, r.cause), disp);
     }
     h += b;
   }
@@ -144,13 +165,43 @@ static String diag_html() {
     h += tr("<p style='color:#ff8a80'><b>Mentett összeomlás</b><br>", "<p style='color:#ff8a80'><b>Saved crash</b><br>");
     h += "<span style='font-family:monospace;font-size:13px'>";
     h += crash_html;
-    h += "</span></p><form method='POST' action='/clearcrash'><button type='submit' style='background:#555;color:#eee'>";
+    h += tr("</span><br><a href='/coredump' style='color:#ff8a3d'>Teljes összeomlás-adat letöltése (coredump.bin)</a>",
+            "</span><br><a href='/coredump' style='color:#ff8a3d'>Download the full crash data (coredump.bin)</a>");
+    h += "</p><form method='POST' action='/clearcrash'><button type='submit' style='background:#555;color:#eee'>";
     h += tr("Összeomlás-adat törlése", "Clear crash data");
     h += "</button></form>";
   } else {
     h += tr("<p>Mentett összeomlás: nincs</p>", "<p>Saved crash: none</p>");
   }
   return h;
+}
+
+// a flashre mentett teljes összeomlás-adat letöltése (a fejlesztőnek: esp-coredump-pal és a verzió .elf-jével
+// visszafejthető a hívási lánc; USB nélkül, mert a port megnyitása újraindítja a lapot)
+static void handle_coredump() {
+  if (!ota_auth_ok()) { request_auth(); return; }
+  size_t addr = 0, size = 0;
+  if (esp_core_dump_image_get(&addr, &size) != ESP_OK || !size || size > 256 * 1024) {
+    cur_srv->send(404, "text/plain", tr("Nincs mentett összeomlás.", "No saved crash."));
+    return;
+  }
+  uint8_t *buf = (uint8_t *)heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+  if (!buf) { cur_srv->send(500, "text/plain", "no memory"); return; }
+  esp_err_t e;
+  {
+    CamPause cam_pause_;   // P4: a flash olvasása alatt is kikapcsol a cache
+    e = esp_flash_read(NULL, buf, addr, size);
+  }
+  if (e != ESP_OK) {
+    free(buf);
+    cur_srv->send(500, "text/plain", "flash read error");
+    return;
+  }
+  cur_srv->sendHeader("Content-Disposition", "attachment; filename=coredump.bin");
+  cur_srv->setContentLength(size);
+  cur_srv->send(200, "application/octet-stream", "");
+  for (size_t o = 0; o < size; o += 4096) cur_srv->sendContent((const char *)buf + o, size - o < 4096 ? size - o : 4096);
+  free(buf);
 }
 
 static void handle_clear_crash() {
