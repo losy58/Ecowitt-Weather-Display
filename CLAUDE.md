@@ -129,7 +129,9 @@ kapcsolható, a kijelzőn: Beállítások / Rendszer / „Bemutató mód...” (
 **Grafikonok** (`idojaras_10`): a Hőmérséklet grafikonon a látható időszak (nap / 7 nap / hónap) legmagasabb és
 legalacsonyabb kinti pontján fehér jel és „max …” / „min …” felirat (`ext_place()`, a kártyán és teljes képernyőn;
 havi nézetben a napi maximumok legmagasabbja és a napi minimumok legalacsonyabbja; v1.2.0, a felhasználó kérése).
-A felirat a pont fölött / alatt, ha ott nem fér el a grafikonon belül, mellette.
+A felirat a pont fölött / alatt, ha ott nem fér el a grafikonon belül, mellette. Havi nézetben a kártyák fejlécében a mai
+nap összesítője áll, **kivéve a Hőmérsékletet**: ott a „Max” / „Min” a hónap szélső értéke, ugyanaz, mint a jelen
+(`series_text()`; v1.3.2, a felhasználó kérése: előtte a mai nap értéke volt, és nem egyezett a jellel).
 
 **Tárolás:**
 - NVS (`Preferences`, `"cfg"` névtér): hely, időzóna, kezelőoldal jelszava, éjszakai mód.
@@ -440,3 +442,7 @@ a felület a teljes 1280x800-at kihasználja.
   sikeres volt: a v1.2.2-es újrapróbálás ezt nem fogja meg). Táp ki/be után rendben. Ugyanazon a tápon öt ki-be
   dugásnál nem jött elő. Feltevés: a panel a rádugáskor ingadozó feszültségtől elvesztette a beállításait. Lehetséges
   javítás: a panel állapotának olvasása (DCS `0x0A`, power mode) induláskor és időnként, hibánál a panel újraindítása.
+- **2026.10.19. 17:08-17:18, v1.3.1, csak a Mac USB-portjáról táplálva:** négy megszakítás-watchdog 10 perc alatt (ok 24,
+  `IDLE0`, `esp_cpu_wait_for_intr`; a coredump szerint minden más feladat várakozott, a saját kód egyik szálban sem
+  szerepelt, a CPU1 regiszterei nem mentődtek). Ugyanaz a kép, mint 10.14-én (Macről táplálva) és 10.18-án (tápváltás):
+  valószínűleg táplálási gond. Ellenőrzés: saját töltőről előjön-e.

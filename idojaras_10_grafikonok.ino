@@ -54,7 +54,7 @@ static lv_obj_t *ch_title[HC_COUNT] = {};
 static lv_chart_series_t *ch_se[HC_COUNT][3] = {};
 static lv_obj_t *ch_toggle = NULL, *ch_tog[3] = {};   // Nap | Hét | Hónap kapcsoló a felső sorban
 static int32_t (*cd)[CH_N_MAX] = NULL;  // a grafikonok adatsorai (PSRAM, CD_ROWS x CH_N_MAX)
-static DaySum ch_today = {};            // a mai nap összesítője (a havi nézet értékfeliratai)
+static DaySum ch_today = {};            // a mai nap összesítője (a havi nézet értékfeliratai; a Hőmérsékleté a hónap max/min)
 static bool ch_today_ok = false;
 
 static lv_obj_t *small_label(lv_obj_t *parent, const char *txt, int x, int y, int w, lv_text_align_t al) {
@@ -307,7 +307,14 @@ static void series_text(const ChartDef &d, int k, bool with_name, char *b, size_
   float v;
   char num[16];
   bool ok;
-  if (ch_mode == 2) {   // havi nézet: a mai nap összesítője
+  if (ch_mode == 2 && &d == &CHARTS[HC_TEMP]) {   // havi Hőmérséklet: a hónap max / min (mint a grafikon jele)
+    const int32_t *a = cd[chf(d, k)];
+    int32_t r = k ? INT32_MAX : INT32_MIN;
+    for (int i = 0; i < ch_n(); i++)
+      if (a[i] != LV_CHART_POINT_NONE && (k ? a[i] < r : a[i] > r)) r = a[i];
+    ok = r != INT32_MAX && r != INT32_MIN;
+    v = r / (float)d.div;
+  } else if (ch_mode == 2) {   // havi nézet: a mai nap összesítője
     const int16_t r = ch_today.v[d.mfield[k]];
     ok = ch_today_ok && r != HIST_NONE;
     v = r / (float)d.div;
