@@ -108,7 +108,8 @@ A kész programfájlok minden [kiadáshoz](https://github.com/losy58/Ecowitt-Wea
 - vagy [esptool](https://docs.espressif.com/projects/esptool/)-lal: `esptool --chip esp32s3 write-flash 0x0 <fájl>`
   (7B), ill. `esptool --chip esp32p4 write-flash 0x0 <fájl>` (P4).
 
-A `factory.bin` a tárolt beállításokat (WiFi, hely, …) is törli: csak az első telepítéshez való. Utána lásd az
+A `factory.bin` a tárolt beállításokat (WiFi, hely, …) is törli: csak az első telepítéshez való. (A P4-en a WiFi-hálózatot
+a WiFi-csip tárolja, az megmarad; törlése: Beállítások / WiFi / WiFi elfelejtése.) Utána lásd az
 [Üzembe helyezés](#üzembe-helyezés) részt. **A frissítés** mindent megtart: az `ota.bin` fájlt a kijelző webes
 kezelőoldalán kell feltölteni.
 

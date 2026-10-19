@@ -107,7 +107,8 @@ Ready-made firmware files are attached to each [release](https://github.com/losy
 - or with [esptool](https://docs.espressif.com/projects/esptool/): `esptool --chip esp32s3 write-flash 0x0 <file>`
   (7B) or `esptool --chip esp32p4 write-flash 0x0 <file>` (P4).
 
-The `factory.bin` also clears the stored settings (WiFi, location, …): use it only for the first installation. Then
+The `factory.bin` also clears the stored settings (WiFi, location, …): use it only for the first installation. (On the
+P4 the WiFi network is stored by the WiFi chip and stays; to clear it: Settings / WiFi / Forget WiFi.) Then
 continue with [Setup](#setup). **Updates** keep everything: upload the `ota.bin` on the display's web page.
 
 The P4 firmware is built for ESP32-P4 chip revision v3 (tested on v3.2; older revisions may not run it) and expects
