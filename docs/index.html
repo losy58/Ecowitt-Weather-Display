@@ -64,13 +64,17 @@
       <span slot="not-allowed"><p>The page must be opened over HTTPS. / Az oldalt HTTPS-en kell megnyitni.</p></span>
     </esp-web-install-button>
     <div data-l="en">
-      <p class="warn">The installation writes the complete firmware and <b>clears the stored settings</b> (WiFi, location, …; on the P4 the WiFi network is kept by the WiFi chip).
-        Use it for the first installation. A running display is updated on its own web page instead (keeps everything):
+      <p class="warn">The installer asks whether to <b>erase the device</b> first. For a new display choose yes. For a display
+        already in use choose no: then the history (graphs) stays, but the settings (location, time zone, …) are still reset.
+        Erasing deletes everything except, on the P4, the WiFi network (the WiFi chip keeps it).
+        A running display is better updated on its own web page (keeps everything):
         upload the <code>…-ota.bin</code> file from the <a href="https://github.com/losy58/Ecowitt-Weather-Display/releases/latest">release</a>.</p>
     </div>
     <div data-l="hu">
-      <p class="warn">A telepítés a teljes programot felírja, és <b>törli a tárolt beállításokat</b> (WiFi, hely, …; a P4-en a WiFi-hálózatot a WiFi-csip megtartja): az első
-        telepítéshez való. A működő kijelzőt inkább a saját webes kezelőoldalán frissítsd (mindent megtart): a
+      <p class="warn">A telepítő megkérdezi, hogy előbb <b>törölje-e az eszközt</b>. Új kijelzőnél válaszd az igent. Már
+        használt kijelzőnél a nemet: akkor az előzmény (a grafikonok) megmarad, de a beállítások (hely, időzóna, …) így is
+        alaphelyzetbe kerülnek. A törlés mindent töröl, kivéve a P4-en a WiFi-hálózatot (azt a WiFi-csip tárolja).
+        A működő kijelzőt inkább a saját webes kezelőoldalán frissítsd (mindent megtart): a
         <a href="https://github.com/losy58/Ecowitt-Weather-Display/releases/latest">kiadás</a> <code>…-ota.bin</code> fájlját kell feltölteni.</p>
     </div>
   </div>

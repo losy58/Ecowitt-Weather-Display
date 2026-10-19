@@ -59,7 +59,7 @@ static void diag_init() {
   CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
   Preferences p;
   p.begin("diag", false);
-  p.getBytes("boots", boots, sizeof(boots));
+  if (p.isKey("boots")) p.getBytes("boots", boots, sizeof(boots));   // (az első induláskor még nincs: ne legyen hibasor)
   memmove(&boots[1], &boots[0], sizeof(BootRec) * (BOOT_HIST - 1));
   boots[0] = cur;                       // az időpontot a pontos idő megérkezése után írjuk be
   p.putBytes("boots", boots, sizeof(boots));

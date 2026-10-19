@@ -37,9 +37,10 @@ void wifiSetCallbacks(WifiPumpCb pump, WifiStatusCb status)
 
 static void setStatus(const char *msg)
 {
-    Serial.println(msg);
     if (uiStatus)
-        uiStatus(msg);
+        uiStatus(msg);   // a Napló a soros portra is kiírja
+    else
+        Serial.println(msg);
 }
 
 static void pump()

@@ -318,14 +318,20 @@ struct CamPause {
 #endif
 };
 
+// A hiányzó kulcs olvasásakor a Preferences hibasort ír a naplóba (üres NVS: első indulás, teljes telepítés után),
+// pedig az alapérték a jó: ezért előbb megnézzük, van-e ilyen kulcs
+static String pref_str(Preferences &p, const char *k, const char *def) { return p.isKey(k) ? p.getString(k, def) : String(def); }
+static double pref_dbl(Preferences &p, const char *k, double def) { return p.isKey(k) ? p.getDouble(k, def) : def; }
+static float pref_flt(Preferences &p, const char *k, float def) { return p.isKey(k) ? p.getFloat(k, def) : def; }
+
 static void cfg_load() {
   Preferences p;
   p.begin("cfg", true);
   cfg.has_loc = p.isKey("lat") && p.isKey("lon");
-  cfg.lat = p.getDouble("lat", 0.0);
-  cfg.lon = p.getDouble("lon", 0.0);
-  String tz = p.getString("tz", TZ_DEFAULT);
-  String pw = p.getString("pw", "");
+  cfg.lat = pref_dbl(p, "lat", 0.0);
+  cfg.lon = pref_dbl(p, "lon", 0.0);
+  String tz = pref_str(p, "tz", TZ_DEFAULT);
+  String pw = pref_str(p, "pw", "");
   cfg.n_on  = p.getBool("n_on", true);
   cfg.n_st  = p.getInt("n_st", 22 * 60);
   cfg.n_en  = p.getInt("n_en", 6 * 60);
@@ -334,20 +340,20 @@ static void cfg_load() {
   cfg.n_mode = p.getInt("n_mode", 0);
   cfg.n_so  = p.getInt("n_so", 30);
   cfg.n_ro  = p.getInt("n_ro", 0);
-  strlcpy(cfg.nt_topic, p.getString("nt_t", "").c_str(), sizeof(cfg.nt_topic));
+  strlcpy(cfg.nt_topic, pref_str(p, "nt_t", "").c_str(), sizeof(cfg.nt_topic));
   cfg.nt_mask = p.getInt("nt_m", NT_ALL);
   cfg.fw_on = p.getBool("fw_on", false);
   cfg.snd_on = p.getBool("snd", true);
   cfg.snd_vol = constrain(p.getInt("sndv", 1), 0, 2);
   cfg.cam_on = p.getBool("cam", true);
-  strlcpy(cfg.fw_host, p.getString("fw_h", "").c_str(), sizeof(cfg.fw_host));
+  strlcpy(cfg.fw_host, pref_str(p, "fw_h", "").c_str(), sizeof(cfg.fw_host));
   // helyiségek (alapérték: a rooms[] kezdőértéke)
   for (int i = 0; i < ROOM_COUNT; i++) {
     char k[8];
     static const char *EN_ROOM[3] = {"Living room", "Office", "Bedroom"};   // angol felületnél az alapértelmezett nevek
-    snprintf(k, sizeof(k), "r%dn", i); strlcpy(rooms[i].name,  p.getString(k, g_lang ? EN_ROOM[i] : rooms[i].name).c_str(),  sizeof(rooms[i].name));
-    snprintf(k, sizeof(k), "r%dm", i); strlcpy(rooms[i].match, p.getString(k, rooms[i].match).c_str(), sizeof(rooms[i].match));
-    snprintf(k, sizeof(k), "r%dv", i); rooms[i].low_v = p.getFloat(k, rooms[i].low_v);
+    snprintf(k, sizeof(k), "r%dn", i); strlcpy(rooms[i].name,  pref_str(p, k, g_lang ? EN_ROOM[i] : rooms[i].name).c_str(),  sizeof(rooms[i].name));
+    snprintf(k, sizeof(k), "r%dm", i); strlcpy(rooms[i].match, pref_str(p, k, rooms[i].match).c_str(), sizeof(rooms[i].match));
+    snprintf(k, sizeof(k), "r%dv", i); rooms[i].low_v = pref_flt(p, k, rooms[i].low_v);
   }
   p.end();
   strlcpy(cfg.pw, pw.c_str(), sizeof(cfg.pw));

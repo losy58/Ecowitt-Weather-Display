@@ -32,7 +32,9 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   mappájából). ESP Web Tools (10.4.0, **saját fordítás esptool-js 0.7.0-val** a `docs/esp-web-tools/`-ban, 2026.10.19.: a kiadott
   10.4.0 esptool-js 0.6.x-e a csipfelismeréskor a `0x40001000`-t olvassa, ettől a P4 v3.2 elnémul, „Failed to
   initialize”; menet: `docs/esp-web-tools/OLVASS-EL.md`): egy „Install / Telepítés” gomb, a lapka alapján választ
-  (`docs/manifest.json`: `ESP32-S3` → 7B, `ESP32-P4` → P4, a teljes kép a `0x0` címre). A böngésző csak ugyanarról
+  (`docs/manifest.json`: `ESP32-S3` → 7B, `ESP32-P4` → P4, a teljes kép a `0x0` címre). **`new_install_prompt_erase:
+  true`** (2026.10.19.): `false`-nál az ESP Web Tools nem kérdez, hanem az Improv nélküli eszközt telepítés előtt
+  **teljesen törli** (a FFat-et, vagyis az előzményt is; így veszett el a P4-é); most megkérdezi. A böngésző csak ugyanarról
   az oldalról tölthet, ezért a két `factory.bin` a `docs/firmware/`-ben is benne van (a `.gitignore` kivétele).
   **Új kiadásnál** a `docs/firmware/` fájljait, a `docs/manifest.json` nevét/verzióját és a `docs/index.html` verziószámát (két nyelven) is frissíteni kell. Az oldal
   angolul és magyarul (a böngésző nyelve szerint, váltható).
