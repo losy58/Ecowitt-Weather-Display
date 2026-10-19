@@ -7,61 +7,147 @@ static unsigned lvgl_used_pct() {
   return mon.used_pct;
 }
 
-// WiFi: a jelenlegi kapcsolat, új hálózat megadása (listából), beállító portál
+// A kérés a beállító hálózatról jön-e (a telefon a kijelző saját WiFi-jén): ott jelszó nélkül a beállító oldal látszik
+static bool portal_client() {
+  return wifiPortalActive() && cur_srv->client().localIP() == WiFi.softAPIP();
+}
+
+#define TL(hu, en_) (en ? (en_) : (hu))   // a WiFi-oldalak szövege az oldal nyelvén (a beállító oldalon választható)
+
+// Új hálózat megadása (listából): a kezelőoldalon és a beállító oldalon is. A beállító oldalon a lista magától betöltődik,
+// és a hely (napkelte, előrejelzés) is megadható.
+static String wifi_form_html(bool en, bool portal) {
+  String h = "<form method='POST' action='/wifiset' id='wf'>";
+  if (portal) { h += "<input type='hidden' name='l' value='"; h += en ? "en" : "hu"; h += "'>"; }
+  h += "<button type='button' id='wsb' style='background:#444;color:#eee'>";
+  h += TL("Hálózatok keresése", "Search for networks");
+  h += "</button><select id='wsl' style='font-size:18px;width:100%;margin:6px 0'><option value=''>";
+  h += TL("(előbb keresd meg a hálózatokat)", "(search for networks first)");
+  h += "</option></select><label>";
+  h += TL("Hálózat neve", "Network name");
+  h += "</label><input name='ssid' id='wss' maxlength='32' required><label>";
+  h += TL("Jelszó", "Password");
+  h += "</label><input name='pass' id='wsp' type='password' maxlength='64' autocomplete='new-password'>"
+       "<label style='display:block'><input type='checkbox' id='wsv' style='width:auto;margin:0 8px 0 0'>";
+  h += TL("Jelszó mutatása", "Show password");
+  h += "</label>";
+  if (portal) {
+    char la[16] = "", lo[16] = "";
+    if (cfg.has_loc) { snprintf(la, sizeof(la), "%.4f", cfg.lat); snprintf(lo, sizeof(lo), "%.4f", cfg.lon); }
+    h += "<details><summary>";
+    h += TL("Hely (nem kötelező; a napkeltéhez és az előrejelzéshez)", "Location (optional; for sunrise and the forecast)");
+    h += "</summary><label>";
+    h += TL("Földrajzi szélesség (pl. 47.4979)", "Latitude (e.g. 51.5074)");
+    h += "</label><input name='lat' inputmode='decimal' maxlength='15' value='"; h += la; h += "'><label>";
+    h += TL("Földrajzi hosszúság (pl. 19.0402)", "Longitude (e.g. -0.1278)");
+    h += "</label><input name='lon' inputmode='decimal' maxlength='15' value='"; h += lo; h += "'></details>";
+  }
+  h += "<button type='submit'>";
+  h += portal ? TL("Csatlakozás", "Connect") : TL("Csatlakozás az új hálózathoz", "Connect to the new network");
+  h += "</button></form>"
+       "<script>(function(){var l=document.getElementById('wsl'),s=document.getElementById('wss'),p=document.getElementById('wsp'),"
+       "b=document.getElementById('wsb');"
+       "document.getElementById('wsv').onchange=function(){p.type=this.checked?'text':'password';};"
+       "l.onchange=function(){if(l.value)s.value=l.value;};";
+  h += TL("var T=['Keresés...',', jelszavas',', nyílt','Hálózatok keresése újra','Nem sikerült, újra','Nem találtam hálózatot, újra'];",
+          "var T=['Searching...',', secured',', open','Search again','Failed, try again','No network found, try again'];");
+  h += "function scan(){b.textContent=T[0];"
+       "fetch('/wifiscan',{cache:'no-store'}).then(function(x){return x.json();}).then(function(a){l.innerHTML='';"
+       "a.forEach(function(n){var o=document.createElement('option');o.value=n.s;"
+       "o.textContent=n.s+' ('+n.r+' dBm'+(n.l?T[1]:T[2])+')';l.appendChild(o);});"
+       "if(a.length&&!s.value){s.value=a[0].s;}b.textContent=a.length?T[3]:T[5];}).catch(function(){b.textContent=T[4];});}"
+       "b.onclick=scan;";
+  if (portal) h += "scan();";   // a beállító oldalon azonnal
+  h += "})();</script>";   // megerősítő ablak nincs: egyes böngészők nem mutatják (és akkor nem küldenék el); sikertelenül úgyis visszaáll
+  return h;
+}
+
+// WiFi a kezelőoldalon: a jelenlegi kapcsolat, új hálózat megadása, beállító hálózat, a mentett hálózat elfelejtése
 static String wifi_html() {
+  const bool en = g_lang;
   char b[300];
   String h = "<h3>WiFi</h3><p>";
   if (WiFi.status() == WL_CONNECTED)
-    snprintf(b, sizeof(b), tr("Hálózat: <b>%s</b>, jelerősség: %d dBm, adóteljesítmény: %s, IP: %s",
+    snprintf(b, sizeof(b), TL("Hálózat: <b>%s</b>, jelerősség: %d dBm, adóteljesítmény: %s, IP: %s",
                               "Network: <b>%s</b>, signal: %d dBm, TX power: %s, IP: %s"),
              html_attr(WiFi.SSID().c_str()).c_str(), (int)WiFi.RSSI(), wifiTxName(), WiFi.localIP().toString().c_str());
   else
-    snprintf(b, sizeof(b), "%s", tr("Nincs kapcsolat.", "Not connected."));
+    snprintf(b, sizeof(b), "%s", TL("Nincs kapcsolat.", "Not connected."));
   h += b;
-  h += "</p><form method='POST' action='/wifiset' id='wf'><button type='button' id='wsb' style='background:#444;color:#eee'>";
-  h += tr("Hálózatok keresése", "Search for networks");
-  h += "</button><select id='wsl' style='font-size:18px;width:100%;margin:6px 0'><option value=''>";
-  h += tr("(előbb keresd meg a hálózatokat)", "(search for networks first)");
-  h += "</option></select><label>";
-  h += tr("Hálózat neve", "Network name");
-  h += "</label><input name='ssid' id='wss' maxlength='32' required><label>";
-  h += tr("Jelszó", "Password");
-  h += "</label><input name='pass' id='wsp' type='password' maxlength='64' autocomplete='new-password'>"
-       "<label style='display:block'><input type='checkbox' id='wsv' style='width:auto;margin:0 8px 0 0'>";
-  h += tr("Jelszó mutatása", "Show password");
-  h += "</label><button type='submit'>";
-  h += tr("Csatlakozás az új hálózathoz", "Connect to the new network");
-  h += "</button></form><p style='color:#aaa;margin:0'>";
-  h += tr("A kijelző kipróbálja az új hálózatot; ha 25 mp alatt nem sikerül, visszaáll a mostanira. "
+  h += "</p>";
+  h += wifi_form_html(en, false);
+  h += "<p style='color:#aaa;margin:0'>";
+  h += TL("A kijelző kipróbálja az új hálózatot; ha 25 mp alatt nem sikerül, visszaáll a mostanira. "
           "Új hálózaton más IP-címet kaphat: ezt a kijelző felső sorában látod (a konzoloknál is át kell írni).",
           "The display tries the new network; if it does not succeed within 25 s, it goes back to the current one. "
           "On a new network it may get a different IP address: you see it in the top line of the display (it must also be "
           "changed in the consoles).");
   h += "</p><form method='POST' action='/wifiportal'><button type='submit' style='background:#444;color:#eee'>";
-  h += tr("Beállító portál indítása (újraindul, 5 perc)", "Start the setup portal (restarts, 5 minutes)");
-  h += "</button></form>"
-       "<script>(function(){var l=document.getElementById('wsl'),s=document.getElementById('wss'),p=document.getElementById('wsp');"
-       "document.getElementById('wsv').onchange=function(){p.type=this.checked?'text':'password';};"
-       "l.onchange=function(){if(l.value)s.value=l.value;};";
-  h += tr("var T=['Keresés...',', jelszavas',', nyílt','Hálózatok keresése','Nem sikerült, újra'];",
-          "var T=['Searching...',', secured',', open','Search for networks','Failed, try again'];");
-  h += "document.getElementById('wsb').onclick=function(){var b=this;b.textContent=T[0];"
-       "fetch('/wifiscan').then(function(x){return x.json();}).then(function(a){l.innerHTML='';"
-       "a.forEach(function(n){var o=document.createElement('option');o.value=n.s;"
-       "o.textContent=n.s+' ('+n.r+' dBm'+(n.l?T[1]:T[2])+')';l.appendChild(o);});"
-       "if(a.length){s.value=a[0].s;}b.textContent=T[3];}).catch(function(){b.textContent=T[4];});};"
-       "})();</script>";   // megerősítő ablak nincs: egyes böngészők nem mutatják (és akkor nem küldenék el); sikertelenül úgyis visszaáll
+  snprintf(b, sizeof(b), TL("Beállító hálózat (%s) indítása 5 percre", "Open the setup network (%s) for 5 minutes"), wifiApName());
+  h += b;
+  h += "</button></form><form method='POST' action='/wififorget' onsubmit=\"return confirm('";
+  h += TL("A mentett hálózat törlődik, és a kijelző a beállító hálózatot indítja; ezen a hálózaton nem lesz elérhető. Mehet?",
+          "The saved network is deleted and the display opens the setup network; it will not be reachable on this network. Continue?");
+  h += "')\"><button type='submit' style='background:#6a2a1f;color:#eee'>";
+  h += TL("WiFi elfelejtése", "Forget WiFi");
+  h += "</button></form>";
   return h;
 }
 
+// A beállító oldal (a beállító hálózatról a "/" és minden ismeretlen cím ide vezet). Nyelve választható (?l=hu / ?l=en).
+static void handle_portal_page() {
+  const String la = cur_srv->arg("l");
+  const bool en = la == "en" ? true : la == "hu" ? false : (bool)g_lang;
+  char b[300], ss[40];
+  String h = "<!doctype html><html lang='";
+  h += en ? "en" : "hu";
+  h += "'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+       "<title>Ecowitt Weather Display - WiFi</title><style>body{font-family:sans-serif;background:#121212;color:#eee;max-width:480px;"
+       "margin:20px auto;padding:0 16px}a{color:#ff8a3d}summary{margin:10px 0;cursor:pointer}"
+       "input,button{font-size:18px;margin:10px 0;width:100%;box-sizing:border-box}button{padding:12px;background:#ff8a3d;border:0;"
+       "border-radius:8px;color:#000;cursor:pointer}button:disabled{opacity:.6}</style></head><body>"
+       "<p style='text-align:right;margin:0'><a href='/?l=hu'>Magyar</a> | <a href='/?l=en'>English</a></p>"
+       "<h2>Ecowitt Weather Display</h2><h3>";
+  h += TL("WiFi beállítása", "WiFi setup");
+  h += "</h3><p>";
+  if (WiFi.status() == WL_CONNECTED)
+    snprintf(b, sizeof(b), TL("Most: <b>%s</b> (IP: %s). Ha nem adsz meg újat, ez marad.", "Now: <b>%s</b> (IP: %s). If you set no new one, this one stays."),
+             html_attr(WiFi.SSID().c_str()).c_str(), WiFi.localIP().toString().c_str());
+  else if (wifiSavedSsid(ss, sizeof(ss)))
+    snprintf(b, sizeof(b), TL("Mentett hálózat: <b>%s</b> - most nem érhető el.", "Saved network: <b>%s</b> - not available now."), html_attr(ss).c_str());
+  else
+    snprintf(b, sizeof(b), "%s", TL("Még nincs beállított WiFi-hálózat.", "No WiFi network is set yet."));
+  h += b;
+  h += "</p><p>";
+  h += TL("Válaszd ki a hálózatot a listából (a keresés pár másodperc), add meg a jelszavát, és nyomd meg a Csatlakozás gombot.",
+          "Choose your network from the list (searching takes a few seconds), enter its password and press Connect.");
+  h += "</p>";
+  h += wifi_form_html(en, true);
+  h += "<p style='color:#aaa'>";
+  h += TL("Csatlakozás után a kezelőoldal (beállítások, frissítés) a saját hálózatodon: http://" MDNS_HOST ".local/",
+          "After connecting, the web page (settings, updates) is on your own network: http://" MDNS_HOST ".local/");
+  h += "</p></body></html>";
+  cur_srv->send(200, "text/html; charset=utf-8", h);
+}
+
+// Ismeretlen cím: a beállító hálózaton a beállító oldalra irányít (így nyitja meg a telefon magától: "captive portal")
+static void handle_not_found() {
+  if (portal_client()) {
+    cur_srv->sendHeader("Location", String("http://") + wifiApAddr() + "/", true);
+    cur_srv->send(302, "text/plain", "");
+    return;
+  }
+  cur_srv->send(404, "text/plain", "Not found");
+}
+
 static void handle_wifi_scan() {
-  if (!ota_auth_ok()) { request_auth(); return; }
+  if (!portal_client() && !ota_auth_ok()) { request_auth(); return; }
   cur_srv->send(200, "application/json", wifiScanJson());
 }
 
 // az átállás a válasz elküldése után, a loop()-ban fut (wifi_switch_task)
 static char wifi_new_ssid[33] = "", wifi_new_pass[65] = "";
-static bool wifi_switch_pending = false;
+static bool wifi_switch_pending = false, wifi_forget_pending = false;
 static int wifi_switch_state = 0;   // 0: nincs, 1: folyamatban, 2: sikerült, 3: nem sikerült (visszaállt a régire)
 
 // az átállás állapota JSON-ban (az "Átállás folyamatban" oldal ezt kérdezi le)
@@ -73,16 +159,39 @@ static void handle_wifi_status() {
 }
 
 static void handle_wifi_set() {
-  if (!ota_auth_ok()) { request_auth(); return; }
+  const bool portal = portal_client();
+  if (!portal && !ota_auth_ok()) { request_auth(); return; }
+  const String lang = cur_srv->arg("l");
+  const bool en = lang.length() ? lang == "en" : (bool)g_lang;
+  const String back = portal ? String("/?l=") + (en ? "en" : "hu") : String("/");
   String ss = cur_srv->arg("ssid"), pw = cur_srv->arg("pass");
   ss.trim();
   if (ss.isEmpty() || ss.length() > 32 || pw.length() > 64 || (pw.length() > 0 && pw.length() < 8)) {
-    cur_srv->send(400, "text/html; charset=utf-8", String("<html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;"
-                  "background:#121212;color:#eee;padding:30px'><h2>") +
-                  tr("Nem állítottam át</h2><p>Hibás hálózatnév vagy jelszó (a jelszó legalább 8 karakter, vagy üres a nyílt hálózatnál).",
+    cur_srv->send(400, "text/html; charset=utf-8", String("<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+                  "</head><body style='font-family:sans-serif;background:#121212;color:#eee;padding:30px'><h2>") +
+                  TL("Nem állítottam át</h2><p>Hibás hálózatnév vagy jelszó (a jelszó legalább 8 karakter, vagy üres a nyílt hálózatnál).",
                      "Not changed</h2><p>Invalid network name or password (the password is at least 8 characters, or empty for an open network).") +
-                  "</p><p><a style='color:#ff8a3d' href='/'>" + tr("Vissza", "Back") + "</a></p></body></html>");
+                  "</p><p><a style='color:#ff8a3d' href='" + back + "'>" + TL("Vissza", "Back") + "</a></p></body></html>");
     return;
+  }
+  // a beállító oldalon megadott hely (csak ha mindkét mező érvényes)
+  String la = cur_srv->arg("lat"), lo = cur_srv->arg("lon");
+  la.trim(); lo.trim(); la.replace(',', '.'); lo.replace(',', '.');
+  const double lat = la.toDouble(), lon = lo.toDouble();
+  if (la.length() && lo.length() && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 && !(lat == 0 && lon == 0) &&
+      (!cfg.has_loc || lat != cfg.lat || lon != cfg.lon)) {
+    {
+      CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
+      Preferences p;
+      p.begin("cfg", false);
+      p.putDouble("lat", lat);
+      p.putDouble("lon", lon);
+      p.end();
+    }
+    cfg_load();
+    fc.valid = false; fc_force = true;   // új hely: új előrejelzés
+    sun_last_key = -1;
+    LogOut.println("Hely mentve (a beállító oldalon)");
   }
   strlcpy(wifi_new_ssid, ss.c_str(), sizeof(wifi_new_ssid));
   strlcpy(wifi_new_pass, pw.c_str(), sizeof(wifi_new_pass));
@@ -90,24 +199,30 @@ static void handle_wifi_set() {
   wifi_switch_state = 1;
   cur_srv->sendHeader("Connection", "close");
   // az oldal 2 mp-enként lekérdezi az állapotot (az átállás alatt a kijelző nem válaszol), és kiírja az eredményt
-  String pg = String("<html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;"
-                "background:#121212;color:#eee;padding:30px'><h2 id='h'>") + tr("Átállás folyamatban...", "Switching...") +
-              "</h2><p>" + tr("Csatlakozás ide: ", "Connecting to: ") + "<b>" + html_attr(wifi_new_ssid) + "</b></p><p id='m'>" +
-              tr("Várakozás a kijelzőre...", "Waiting for the display...") + "</p><p><a style='color:#ff8a3d' href='/'>" +
-              tr("Vissza a kezelőoldalra", "Back to the web page") + "</a></p><script>" +
-              tr("var T=['Sikerült','A kijelző átállt ide: ',', IP-cím: ','Nem sikerült','Nem tudott csatlakozni (rossz jelszó, vagy nem "
+  char ap[200];
+  snprintf(ap, sizeof(ap), TL(" A beállító hálózat (%s) 1 perc múlva bezárul. Kezelőoldal: http://" MDNS_HOST ".local/",
+                              " The setup network (%s) closes in 1 minute. Web page: http://" MDNS_HOST ".local/"), wifiApName());
+  String pg = String("<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+                "<body style='font-family:sans-serif;background:#121212;color:#eee;padding:30px'><h2 id='h'>") + TL("Átállás folyamatban...", "Switching...") +
+              "</h2><p>" + TL("Csatlakozás ide: ", "Connecting to: ") + "<b>" + html_attr(wifi_new_ssid) + "</b></p><p id='m'>" +
+              TL("Várakozás a kijelzőre...", "Waiting for the display...") + "</p><p><a style='color:#ff8a3d' href='" + back + "'>" +
+              (portal ? TL("Vissza a beállító oldalra", "Back to the setup page") : TL("Vissza a kezelőoldalra", "Back to the web page")) + "</a></p><script>" +
+              TL("var T=['Sikerült','A kijelző átállt ide: ',', IP-cím: ','Nem sikerült','Nem tudott csatlakozni (rossz jelszó, vagy nem "
                  "elérhető a hálózat), ezért visszaállt a régire: ','Folyamatban... (',' mp)','A kijelző nem érhető el',"
                  "'Ezen a hálózaton nem válaszol: valószínűleg átállt az új hálózatra. Az új IP-cím a kijelző felső sorában látszik.',"
-                 "'A kijelző most nem válaszol (csatlakozik)... ('];",
+                 "'A kijelző most nem válaszol (csatlakozik)... (','Nem tudott csatlakozni (rossz jelszó, vagy nem elérhető a hálózat). "
+                 "Próbáld újra.'];",
                  "var T=['Done','The display switched to: ',', IP address: ','Failed','It could not connect (wrong password, or the "
                  "network is not available), so it went back to the old one: ','In progress... (',' s)','The display is not reachable',"
                  "'It does not answer on this network: it has probably switched to the new network. The new IP address is shown in "
-                 "the top line of the display.','The display does not answer right now (connecting)... ('];") +
+                 "the top line of the display.','The display does not answer right now (connecting)... (','It could not connect "
+                 "(wrong password, or the network is not available). Try again.'];") +
+              "var P=" + (portal ? "1" : "0") + ",A='" + ap + "';"
               "var t0=Date.now(),h=document.getElementById('h'),m=document.getElementById('m');"
               "function poll(){var s=Math.round((Date.now()-t0)/1000);"
               "fetch('/wifistatus',{cache:'no-store'}).then(function(x){return x.json();}).then(function(j){"
-              "if(j.state==2){h.textContent=T[0];m.textContent=T[1]+j.ssid+T[2]+j.ip;return;}"
-              "if(j.state==3){h.textContent=T[3];m.textContent=T[4]+j.ssid+' ('+j.ip+').';return;}"
+              "if(j.state==2){h.textContent=T[0];m.textContent=T[1]+j.ssid+T[2]+j.ip+(P?A:'');return;}"
+              "if(j.state==3){h.textContent=T[3];m.textContent=j.ssid?T[4]+j.ssid+' ('+j.ip+').':T[10];return;}"
               "m.textContent=T[5]+s+T[6];setTimeout(poll,2000);"
               "}).catch(function(){if(s>90){h.textContent=T[7];m.textContent=T[8];return;}"
               "m.textContent=T[9]+s+T[6];setTimeout(poll,2000);});}"
@@ -116,6 +231,13 @@ static void handle_wifi_set() {
 }
 
 static void wifi_switch_task() {
+  if (wifi_forget_pending) {
+    wifi_forget_pending = false;
+    delay(500);   // a válasz kimenjen
+    LogOut.println("WiFi elfelejtése (a kezelőoldalon)");
+    wifiForget();
+    return;
+  }
   if (!wifi_switch_pending) return;
   wifi_switch_pending = false;
   delay(500);   // a válasz kimenjen
@@ -124,25 +246,41 @@ static void wifi_switch_task() {
   wifi_switch_state = ok ? 2 : 3;
   memset(wifi_new_pass, 0, sizeof(wifi_new_pass));
   LogOut.println(ok ? "WiFi átállás sikerült" : "WiFi átállás nem sikerült, vissza a régire");
-  MDNS.end();   // az új IP-n is elérhető legyen idojaras.local néven
-  if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
+  if (ok) { wifiTakeConnected(); wifi_connected(); }   // pontos idő, mDNS az új hálózaton, a WiFi-panelen a siker (egyszer)
 }
 
 static void handle_wifi_portal() {
   if (!ota_auth_ok()) { request_auth(); return; }
+  const bool en = g_lang;
+  wifiPortalStart(5UL * 60UL * 1000UL);
+  wp_open();
+  char b[400];
+  snprintf(b, sizeof(b), TL("Beállító hálózat</h2><p>5 percre elindult a \"%s\" hálózat (a mostani kapcsolat megmarad). Csatlakozz rá "
+                            "telefonnal: a telefon magától megnyitja a beállító oldalt (ha nem: http://%s/).",
+                            "Setup network</h2><p>The \"%s\" network is open for 5 minutes (the current connection stays). Connect to it "
+                            "with a phone: it opens the setup page by itself (if not: http://%s/)."), wifiApName(), wifiApAddr());
   cur_srv->send(200, "text/html; charset=utf-8", String("<html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;"
-                "background:#121212;color:#eee;padding:30px'><h2>") +
-                tr("Beállító portál</h2><p>A kijelző újraindul, és 5 percre elindítja a \"Weather-Setup\" hálózatot. Csatlakozz rá "
-                   "telefonnal, és válaszd ki a hálózatot.",
-                   "Setup portal</h2><p>The display restarts and opens the \"Weather-Setup\" network for 5 minutes. Connect to it with "
-                   "a phone and choose your network.") + "</p></body></html>");
-  delay(500);
-  hist_save();
-  diag_mark_restart(RC_WIFISET);
-  ESP.restart();
+                "background:#121212;color:#eee;padding:30px'><h2>") + b + "</p><p><a style='color:#ff8a3d' href='/'>" +
+                TL("Vissza a kezelőoldalra", "Back to the web page") + "</a></p></body></html>");
 }
 
+static void handle_wifi_forget() {
+  if (!ota_auth_ok()) { request_auth(); return; }
+  const bool en = g_lang;
+  char b[400];
+  snprintf(b, sizeof(b), TL("WiFi elfelejtése</h2><p>A mentett hálózat törlődik, és a kijelző elindítja a \"%s\" beállító hálózatot. "
+                            "Ezen a hálózaton a kijelző már nem érhető el.",
+                            "Forget WiFi</h2><p>The saved network is deleted and the display opens the \"%s\" setup network. "
+                            "The display is no longer reachable on this network."), wifiApName());
+  cur_srv->sendHeader("Connection", "close");
+  cur_srv->send(200, "text/html; charset=utf-8", String("<html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;"
+                "background:#121212;color:#eee;padding:30px'><h2>") + b + "</p></body></html>");
+  wifi_forget_pending = true;
+}
+#undef TL
+
 static void handle_update_page() {
+  if (portal_client()) { handle_portal_page(); return; }   // a beállító hálózatról: jelszó nélkül csak a WiFi beállítása
   if (!ota_auth_ok()) { request_auth(); return; }
   String h = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
              "<title>Ecowitt Weather Display</title><style>body{font-family:sans-serif;background:#121212;color:#eee;max-width:480px;margin:30px auto;padding:0 16px}"

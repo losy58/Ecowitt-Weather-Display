@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ecowitt Weather Display – Installer</title>
 <meta name="description" content="Install the Ecowitt Weather Display firmware from the browser over USB.">
-<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<!-- ESP Web Tools 10.4.0, saját fordítás esptool-js 0.7.0-val (a P4 v3.x miatt), lásd esp-web-tools/OLVASS-EL.md -->
+<script type="module" src="esp-web-tools/install-button.js"></script>
 <style>
   :root { --bg: #121212; --card: #1e1e1e; --text: #e8e8e8; --muted: #a8a8a8; --accent: #ff8a3d; --line: #333; }
   * { box-sizing: border-box; }
@@ -84,7 +85,7 @@
     <p class="muted">Any ESP32-S3 board gets the Waveshare 7B firmware, which only works on that display.</p>
     <h2>After installing</h2>
     <ol>
-      <li>The display opens the <b>Weather-Setup</b> WiFi network: connect with a phone and choose your network.</li>
+      <li>The display opens the <b>Weather-Setup</b> WiFi network (on the P4: <b>Weather-Setup-P4</b>) and shows the steps with QR codes: connect with a phone, the setup page opens by itself (or open http://192.168.4.1/), and choose your network.</li>
       <li>Open the display's web page (the address is shown in its top line) and set the location and the rooms.</li>
       <li>In the Ecowitt app (<i>Weather Services → Customized</i>): protocol Ecowitt, the display's IP address, path
         <code>/ecowitt</code>, port 80.</li>
@@ -101,7 +102,7 @@
     <p class="muted">Bármely ESP32-S3-as lap a Waveshare 7B programját kapja, ami csak azon a kijelzőn működik.</p>
     <h2>Telepítés után</h2>
     <ol>
-      <li>A kijelző elindítja a <b>Weather-Setup</b> WiFi-hálózatot: csatlakozz rá telefonnal, és válaszd ki a hálózatodat.</li>
+      <li>A kijelző elindítja a <b>Weather-Setup</b> WiFi-hálózatot (a P4-en: <b>Weather-Setup-P4</b>), és QR-kódokkal mutatja a lépéseket: csatlakozz rá telefonnal, a beállító oldal magától megnyílik (vagy nyisd meg: http://192.168.4.1/), és válaszd ki a hálózatodat.</li>
       <li>Nyisd meg a kijelző webes kezelőoldalát (a címe a kijelző felső sorában látszik), és állítsd be a helyet és a helyiségeket.</li>
       <li>Az Ecowitt-appban (<i>Weather Services → Customized</i>): Ecowitt protokoll, a kijelző IP-címe, útvonal
         <code>/ecowitt</code>, port 80.</li>

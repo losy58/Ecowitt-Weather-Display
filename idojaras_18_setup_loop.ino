@@ -100,23 +100,15 @@ void create_ui() {
   show_page(PAGE_DASH);
 }
 
-// A WiFi-kezelo ezeket hivja varakozas / beallito portal alatt,
-// hogy a kijelzo ilyenkor is frissuljon.
+// A WiFi-kezelő ezeket hívja: a (rövid, blokkoló) hálózatváltás alatt a kijelző frissüljön, az üzenetek a Naplóba
+// kerüljenek (a WiFi állapota a felső sorban látszik: wifiStatusLine, update_status_bar)
 static void ui_pump() {
   lv_timer_handler();
-  if (loop_wdt_on) esp_task_wdt_reset();   // a WiFi-várakozás / portál alatt is (ha a watchdog már fut)
+  if (loop_wdt_on) esp_task_wdt_reset();
 }
 
 static void ui_status(const char *msg) {
-  if (lbl_title) {
-    // indulás közben (WiFi) csak ez az üzenet látszik a fejlécben: a cím és a figyelmeztetés nem kerül alá
-    if (lbl_info) lv_label_set_text(lbl_info, "");
-    if (lbl_warn) lv_label_set_text(lbl_warn, "");
-    lv_label_set_text(lbl_title, msg);
-    lv_obj_align(lbl_title, LV_ALIGN_TOP_LEFT, SX(20), SY(8));   // indulás közben a bal szélen (jobbra a fogaskerék van)
-  }
   LogOut.println(msg);   // a WiFi-kapcsolódás lépései a Naplóban is látszanak
-  lv_timer_handler();
 }
 
 void app_setup() {
@@ -158,21 +150,11 @@ void app_setup() {
   wifiSetCallbacks(ui_pump, ui_status);
   wifiSetEnglish(g_lang);
 
-  // Ha nincs mentett WiFi vagy nem sikerul csatlakozni, a beallito portal
-  // fut (a kijelzon az AP neve es az IP latszik), es nem ter vissza.
-  // a Beállítások képernyőről kért WiFi-beállítás: 5 perc portál, a mentett hálózat megmarad, ha nem adnak meg újat
-  // bemutató módban nincs várakozás a WiFi-re és nincs portál: a kijelző hálózat nélkül is azonnal mutat valamit
-  if (g_demo) {
-    demo_start();
-  } else {
-    if (boots[0].cause == RC_WIFISET) wifiPortalOnce(5UL * 60UL * 1000UL);
-    if (wifiConnectOrSetup()) {
-      LogOut.println("WiFi csatlakozva");
-      cfg_load();   // a WiFi-beállító portálon megadott hely is ide került
-      configTzTime(cfg.tz, "pool.ntp.org", "time.google.com");
-      update_status_bar();
-    }
-  }
+  // A WiFi nem tart fel: a kijelző azonnal működik (érintés, Beállítások), a kapcsolódás a háttérben megy (wifiLoop).
+  // Ha nincs mentett hálózat vagy nem sikerül csatlakozni, elindul a beállító hálózat, és a kijelzőn a "Nincs WiFi"
+  // panel mutatja, hogyan lehet beállítani (idojaras_17f). Bemutató módban nincs beállító hálózat.
+  if (g_demo) demo_start();
+  else        wifiStart();
 
   my_server.on("/", HTTP_GET, handle_update_page);      // a gyökér is a frissítő oldal
   my_server.on("/update", HTTP_GET, handle_update_page);
@@ -192,6 +174,8 @@ void app_setup() {
   my_server.on("/wifiset", HTTP_POST, handle_wifi_set);
   my_server.on("/wifistatus", HTTP_GET, handle_wifi_status);
   my_server.on("/wifiportal", HTTP_POST, handle_wifi_portal);
+  my_server.on("/wififorget", HTTP_POST, handle_wifi_forget);
+  my_server.onNotFound(handle_not_found);   // a beállító hálózaton: a telefonok ellenőrző címei a beállító oldalra
   my_server.begin();
 #if KIJELZO_P4
   if (!g_demo) p4_cam_init(p4_log);   // kamera (fény, jelenlét): a WiFi és a beállító portál (mentésekkel) után
@@ -211,11 +195,14 @@ void app_loop() {
     update_status_bar();
   }
 
-  // Ha a WiFi menet kozben elesik, 10 mp-enkent ujracsatlakozunk
+  // WiFi: indulási próbák, beállító hálózat; ha már volt kapcsolat, és menet közben elesik, 10 mp-enként újracsatlakozunk
+  wifiLoop();
+  if (wifiTakeConnected()) wifi_connected();
+  if (wifiTakePortalOpened()) wp_open();
   static uint32_t last_wifi_check = 0;
   if (millis() - last_wifi_check > 10000) {
     last_wifi_check = millis();
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFi.status() != WL_CONNECTED && (g_demo || wifiManaged())) {
       WiFi.reconnect();
     }
   }
@@ -228,6 +215,7 @@ void app_loop() {
   wifiTune();
   nt_task();
   wifi_switch_task();
+  wp_task();
   if (tap_dot_until && (int32_t)(millis() - tap_dot_until) >= 0) { tap_dot_until = 0; lv_obj_set_hidden(tap_dot, true); }
   touch_task();
   page_task();

@@ -29,7 +29,9 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   commitra, `gh release create vX.Y.Z --verify-tag --title "Ecowitt Weather Display vX.Y.Z" --notes-file … <fájlok>`
   (a jegyzet magyarul és angolul).
 - **Webes telepítő** (2026.10.16.): https://losy58.github.io/Ecowitt-Weather-Display/ (GitHub Pages a `main` ág `docs/`
-  mappájából). ESP Web Tools (10.4.0, unpkg-ről): egy „Install / Telepítés” gomb, a lapka alapján választ
+  mappájából). ESP Web Tools (10.4.0, **saját fordítás esptool-js 0.7.0-val** a `docs/esp-web-tools/`-ban, 2026.10.19.: a kiadott
+  10.4.0 esptool-js 0.6.x-e a csipfelismeréskor a `0x40001000`-t olvassa, ettől a P4 v3.2 elnémul, „Failed to
+  initialize”; menet: `docs/esp-web-tools/OLVASS-EL.md`): egy „Install / Telepítés” gomb, a lapka alapján választ
   (`docs/manifest.json`: `ESP32-S3` → 7B, `ESP32-P4` → P4, a teljes kép a `0x0` címre). A böngésző csak ugyanarról
   az oldalról tölthet, ezért a két `factory.bin` a `docs/firmware/`-ben is benne van (a `.gitignore` kivétele).
   **Új kiadásnál** a `docs/firmware/` fájljait, a `docs/manifest.json` nevét/verzióját és a `docs/index.html` verziószámát (két nyelven) is frissíteni kell. Az oldal
@@ -54,7 +56,7 @@ pio device monitor       # soros napló, 115200
 - Az Arduino IDE is használható ugyanebből a mappából, de **a végleges fordítás PlatformIO-val készüljön**: csak a
   `platformio.ini` `custom_sdkconfig` beállításai (`SPIRAM_XIP_FROM_PSRAM`, `LCD_RGB_ISR_IRAM_SAFE`,
   `MBEDTLS_EXTERNAL_MEM_ALLOC`) akadályozzák meg, hogy flash-írás (mentés, OTA) közben elcsússzon a kép.
-- A könyvtárakat a PlatformIO maga tölti le (`lib_deps`: lvgl 9.6.0, WiFiManager 2.0.17, a `.pio/libdeps/` mappába).
+- A könyvtárakat a PlatformIO maga tölti le (`lib_deps`: lvgl 9.6.0, a `.pio/libdeps/` mappába; a WiFiManager v1.3.0 óta nem kell).
   Platform: pioarduino, Arduino-ESP32 3.3.12 / ESP-IDF 5.5.5. Az Arduino IDE-hez ugyanezeket a verziókat kell
   a Könyvtárkezelőből telepíteni.
 - Windowson a `-I"${PROJECT_DIR}"` idézőjele kell (nélküle eltűnnek a `\` jelek, és az lvgl nem találja a
@@ -74,13 +76,13 @@ egy fordítási egységgé fűzi össze, ezért:
   rajzolás, grafikonok, web, diagnosztika, érintés, fényerő panel, `06b`: a konzolok adatainak továbbküldése másik
   kijelzőre, `17b`: Beállítások képernyő a fogaskerékkel,
   `17c`: telefonos értesítések az ntfy.sh-n, háttérfeladatból, `17d`: bemutató mód, `17e`: P4: óra, akku, hang,
-  kamerás fényerő).
+  kamerás fényerő, `17f`: „Nincs WiFi” panel).
   A számozás határozza meg a sorrendet (a `17b` a `17_` után jön, mert `_` < `b`);
   egy fájl csak a korábban definiált (vagy előre deklarált) `static` függvényeket használhatja.
 - `idojaras_18_setup_loop.ino`: `create_ui()`, `app_setup()` (kijelző → érintés → FFat → beállítások → WiFi → webszerver
   útvonalai → watchdog) és `app_loop()`.
-- `wifi_manager.cpp/.h`: az egyetlen külön fordított C++ fájl; WiFi-kapcsolódás és beállító portál (WiFiManager),
-  callbackekkel frissíti a kijelzőt várakozás közben.
+- `wifi_manager.cpp/.h`: az egyetlen külön fordított C++ fájl; WiFi-kapcsolódás és saját beállító hálózat (állapotgép,
+  a `loop()`-ból léptetve, lásd „WiFi”); a beállító oldal és a WiFi-végpontok az `idojaras_13`-ban.
 - `font_*.c`: LVGL fontok (ékezetes `font_hu_14/28`, hétszegmenses `font_seg_*`; a P4-é nagyobb, a `p4/`-ben); `lv_conf.h`: LVGL-beállítás.
 
 **Futási modell:** egyszálú főciklus. Az `app_loop()` a `my_server.handleClient()`, a `lv_timer_handler()` és a
@@ -135,7 +137,8 @@ A felirat a pont fölött / alatt, ha ott nem fér el a grafikonon belül, melle
 - Diagnosztika: az utolsó indulások oka és a coredump partícióba mentett összeomlás (`idojaras_12_diagnosztika.ino`).
 
 **Webes végpontok** (`app_setup()`): `/` és `/update` (kezelőoldal + OTA), `/settings`, `/raw` (konzolok nyers adatai),
-`/ecowitt` (adatfogadás; `?fwd=1`: továbbküldött adat), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`. mDNS név: `idojaras`.
+`/ecowitt` (adatfogadás; `?fwd=1`: továbbküldött adat), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`; minden ismeretlen cím a beállító hálózaton a
+beállító oldalra irányít (`onNotFound`). mDNS név: `idojaras`.
 
 **Memória:** a belső RAM szűkös (`INTERNAL_RAM_RESERVE` marad a WiFi-nek); a nagy pufferek, az LVGL és az mbedTLS
 a PSRAM-ot használja. Nagy új foglalást PSRAM-ba tegyél (`MALLOC_CAP_SPIRAM`).
@@ -188,11 +191,33 @@ a PSRAM-ot használja. Nagy új foglalást PSRAM-ba tegyél (`MALLOC_CAP_SPIRAM`
   A WiFi energiatakarékos módja ki van kapcsolva.
 - A webes kezelőoldalon is átállítható a hálózat (`/wifiscan`, `/wifiset`, `/wifistatus`): sikertelen csatlakozásnál
   a `wifiSwitchTo()` visszaállítja a régi hálózat mentett adatait.
-- 3 csatlakozási próba, a portál alatt is újrapróbál, 5 perc portál után újraindul. A Beállítások / WiFi fülről indított
-  portálnál a Mentés új hálózat nélkül is visszavisz a mentett hálózatra.
+- **Saját beállító hálózat** (v1.3.0, 2026.10.19., a felhasználó kérése egy bemutató után, ahol új helyen a kijelző
+  használhatatlan volt: a portál alatt nem reagált, nem írta ki az IP-t, nem listázta a hálózatokat, vegyes nyelvű volt).
+  Az indulás nem vár a WiFi-re: a `wifiStart()` / `wifiLoop()` állapotgép 3 próbát tesz (15 mp, három adóteljesítmény),
+  közben a kijelző működik. Ha nem sikerül (vagy nincs mentett hálózat), elindul a jelszó nélküli `Weather-Setup`
+  (P4: `Weather-Setup-P4`) hálózat, 192.168.4.1, DNS-sel minden név ide mutat (a telefon magától megnyitja a beállító
+  oldalt), és a kijelzőn a „Nincs WiFi” panel (`idojaras_17f`): két QR-kód (csatlakozás, oldal), lépések, gombok:
+  Bemutató mód (második koppintásra, újraindul), Újrapróbálás, Bezárás. Bezárva a felső sor „Nincs WiFi - beállítás”
+  feliratára koppintva újranyílik. A mentett hálózatot 2 percenként újrapróbálja, de csak ha senki sincs a beállító
+  hálózaton, és hálózatkeresés után 3 percig nem: **csatlakozási próba közben az ESP32 nem keres hálózatot** (ezért nem
+  jött lista a régi WiFiManager-portálon), és ilyenkor az automatikus újracsatlakozás is ki van kapcsolva. Kapcsolat után
+  a beállító hálózat még 1 percig nyitva marad. Nincs újraindulás-kör.
+- A beállító oldal (`handle_portal_page()`) a beállító hálózatról jövő kérésre (`portal_client()`: a kapcsolat helyi
+  címe a `softAPIP`) jelszó nélkül látszik, nyelve választható (`?l=hu` / `?l=en`, csak az oldalé); a hálózatlista
+  magától betöltődik, a hely is megadható. Ugyanaz az űrlap (`wifi_form_html()`), mint a kezelőoldalon.
+- Kérésre (Beállítások / WiFi „WiFi beállítása...”, kezelőoldal) a beállító hálózat 5 percre nyílik, újraindulás nélkül,
+  a kapcsolat megmarad. „WiFi elfelejtése” (kijelző, kezelőoldal `/wififorget`): `WiFi.disconnect(false, true)`, utána
+  beállító hálózat.
 - `WiFi.SSID()` az arduino-esp32 3.x-ben csatlakozás előtt üres → a mentett hálózatot `esp_wifi_get_config()`-gal kell
   olvasni (különben a program azt hiszi, nincs mentett WiFi, és azonnal a portált indítja, próbák nélkül).
-- A beállító portál alatt az érintés nem működik (csak a WiFiManager fut).
+- **A P4-en a mentett WiFi-hálózatot a WiFi-csip (ESP32-C6) tárolja**, a saját flashében (ESP-Hosted, `esp_wifi_remote`):
+  a P4 teljes újratelepítése (factory.bin, üres NVS) nem törli, a kijelző utána is csatlakozik. Az első indulás
+  kipróbálásához előbb a „WiFi elfelejtése” kell. A 7B-n a teljes telepítés a WiFi-t is törli.
+  **Buktató:** a C6 a futás közben kapott beállítást (új hálózat, törlés) csak a memóriájában változtatta, a flashébe
+  nem írta: a „WiFi elfelejtése” után tápciklusra a régi hálózat visszajött. Ezért a `wifiStart()`, a `wifiSwitchTo()` és
+  a `wifiForget()` kifejezetten `esp_wifi_set_storage(WIFI_STORAGE_FLASH)`-t hív (`storageFlash()`); a felejtés után
+  visszaolvas, és ha a hálózat még megvan, `esp_wifi_restore()`. Így kipróbálva (2026.10.19.): felejtés + tápciklus után
+  beállító hálózat, telefonos beállítás + tápciklus után visszacsatlakozik.
 
 **PlatformIO / .ino összefűzés**
 - A PlatformIO azt a fájlt teszi előre, amelyikben `void setup(` vagy `void loop(` van – ezért marad mindkettő az
@@ -269,7 +294,7 @@ a felület a teljes 1280x800-at kihasználja.
   `backlight_task()` húzza fel: azonnali 100 % + WiFi mellett a Mac USB-portjáról táplálva **brownout** (újraindulás).
   Éles használatra saját töltő kell (a gyártó ≥600 mA-t ír; 2 A-es töltőről nem volt brownout).
 - A soros napló a natív USB-porton (`ARDUINO_USB_CDC_ON_BOOT=1`); induláskor legfeljebb 2 mp-et vár a gépre, hogy az
-  eleje is látsszon. A WiFiManager miatt `-DCONFIG_ESP32_PHY_MAX_WIFI_TX_POWER=20` kell (a P4-ben nincs saját WiFi).
+  eleje is látsszon.
 - A RISC-V-n az összeomlás-összefoglaló más (nincs hívási lánc): `mcause`, `mtval`, `ra` (`idojaras_12`).
   Visszafejtés: `riscv32-esp-elf-addr2line` (`toolchain-riscv32-esp`).
 - **Óra és akku a lapon** (`idojaras_17e_ora_akku.ino`; a kapcsolási rajz `1_PWR.png`, `4_CONN.png`):
@@ -349,7 +374,7 @@ a felület a teljes 1280x800-at kihasználja.
     405 Mbit/s, mint a gyári `video_lcd_display` demóban). Az esp_video (V4L2) helyett közvetlenül a CSI-vezérlő és az
     ISP (RAW10 → RAW8, színkeverés nélkül), a kép a PSRAM-ba. A képmagasság (VTS) 8730 sor: kb. 4 kép/mp, legfeljebb
     245 ms expozíció. Az ISP órajele 240 MHz kell (80 MHz-en nem jött kép: a pixelórajel 81 MHz); előbb a CSI-vezérlő,
-    utána az ISP jön létre (mint az esp_video-ban). A kamera az `app_setup()` végén indul (a WiFi és a portál után),
+    utána az ISP jön létre (mint az esp_video-ban). A kamera az `app_setup()` végén indul,
     bemutató módban nem.
   - Mérés: háttérfeladat (`cam_worker`, PSRAM-verem), fél másodpercenként egy képből 64x36-os rács. **Fényérték** =
     világosság / (expozíció * erősítés), logaritmikus mozgóátlaggal simítva (kb. 3 mp). **Mozgás** = az előző rácshoz

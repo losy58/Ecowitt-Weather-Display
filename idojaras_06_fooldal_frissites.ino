@@ -234,7 +234,7 @@ static void update_status_bar() {
   // figyelmeztetések (minden oldalon): WiFi, szellőztetés, akku, hely
   char warn[160] = "";
   if (g_demo) strlcpy(warn, tr("BEMUTATÓ (kitalált adatok)", "DEMO (made-up data)"), sizeof(warn));
-  else if (WiFi.status() != WL_CONNECTED) strlcpy(warn, tr("WiFi: nincs kapcsolat", "WiFi: not connected"), sizeof(warn));
+  else wifiStatusLine(warn, sizeof(warn));   // kapcsolódás, beállító mód (a hálózat neve és címe), nincs kapcsolat
   if (batt_on) {   // P4: elment a táp, a lap akkuról megy
     char b[48];
     snprintf(b, sizeof(b), tr("Akkuról megy: %d %%", "On battery: %d %%"), batt_pct);

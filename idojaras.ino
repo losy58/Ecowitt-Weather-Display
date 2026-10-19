@@ -6,7 +6,7 @@
 //   idojaras.ino                 beállítások, adattípusok, közös változók
 //   idojaras_02..18_*.ino        témánként a függvények: kijelző, előzmények, előrejelzés, főoldal, konzolok, grafikonok,
 //                                webes kezelőoldal, diagnosztika, érintés, fényerő panel, végül az indítás és a főciklus
-//   wifi_manager.cpp/.h          WiFi-kapcsolódás és beállító portál
+//   wifi_manager.cpp/.h          WiFi-kapcsolódás és saját beállító hálózat (a beállító oldal: idojaras_13)
 //   font_*.c, lv_conf.h          fontok és LVGL-beállítás
 #define LV_CONF_INCLUDE_SIMPLE 1
 #include <Arduino.h>
@@ -225,6 +225,7 @@ enum { HC_TEMP, HC_PRESS, HC_WIND, HC_RAIN, HC_ITEMP, HC_CO2, HC_COUNT };
 // az előzménymezők (hs_get) sorszáma
 enum { F_TO, F_TI, F_P, F_W, F_G, F_R, F_T2, F_T3, F_C1, F_C3, F_C2, F_COUNT };
 enum { RC_NONE, RC_OTA, RC_PORTAL, RC_PANEL, RC_WIFISET, RC_MANUAL };   // a program saját újraindításainak oka (diagnosztika)
+void diag_mark_restart(int cause);   // idojaras_12: a program által kezdeményezett újraindítás oka (ESP.restart() előtt)
 bool diag_display_failed();   // idojaras_12: a kijelző nem indult (feljegyzi; true: újraindítással újra kell próbálni)
 // a napi összesítők mezői (havi grafikon); a grafikon-adatsorban az indexük F_COUNT + M_*
 // (az M_C2 a végén: így a DaySum mérete nem változott, a régi DAY1 fájl átalakítás nélkül beolvasható)

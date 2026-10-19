@@ -5,6 +5,12 @@
       "name": "idojaras-eszkoz",
       "url": "http://idojaras.local",
       "port": 80
+    },
+    {
+      "name": "webes-telepito",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "docs"],
+      "port": 8765
     }
   ]
 }

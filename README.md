@@ -55,7 +55,9 @@ Photos of the display in demo mode (made-up data, English interface).
   not touch the real history.
 
 **Network**
-- **WiFi setup portal** on first start (WiFiManager); the network can later be changed on the web page as well.
+- **WiFi setup network** when there is no connection (`Weather-Setup`, on the P4 `Weather-Setup-P4`): the phone opens the
+  setup page by itself; the display shows the steps with two QR codes and stays usable (demo mode one tap away).
+  The network can later be changed or forgotten on the web page and on the display as well.
   In mesh networks it connects to the strongest access point.
 - **Web page** (`http://idojaras.local/`, on the P4 `http://idojaras-p4.local/`): settings, OTA update, raw console
   data, diagnostics (reset reasons, crash summary), optional password.
@@ -117,7 +119,7 @@ Build the final firmware **with PlatformIO**: `platformio.ini` contains ESP-IDF 
 which the picture shifts or flashes during flash writes (saving, OTA).
 
 1. Install [PlatformIO Core](https://platformio.org/install/cli) (or the VS Code extension).
-2. Clone the repository. The libraries (LVGL 9.6.0, WiFiManager 2.0.17) are downloaded by PlatformIO on the first
+2. Clone the repository. The library (LVGL 9.6.0) is downloaded by PlatformIO on the first
    build.
 3. Build and upload over USB:
    ```
@@ -155,7 +157,7 @@ Later updates can go over the air: upload `.pio/build/<environment>/firmware.bin
 | `/`, `/update` | web page, settings, OTA update |
 | `/raw` | all fields of each console's last upload |
 | `/ecowitt` | data from the consoles (`?fwd=1`: forwarded data, not forwarded again) |
-| `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/ntfytest`, `/clearcrash` | web page actions |
+| `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`, `/ntfytest`, `/clearcrash` | web page actions |
 
 Without a password anyone on the local network can reach the web page. Do not expose the display directly to the
 internet.
@@ -171,7 +173,7 @@ in Hungarian.
 | `idojaras.ino` | includes, pins, data types, shared variables, tunable constants (thresholds, colours), settings |
 | `idojaras_02`…`_17e_*.ino` | display, time and brightness, history, forecast, dashboard, consoles, forwarding, charts, web, diagnostics, touch, settings, notifications, demo, RTC and battery |
 | `idojaras_18_setup_loop.ino` | UI construction, startup, main loop |
-| `wifi_manager.cpp/.h` | WiFi connection and setup portal |
+| `wifi_manager.cpp/.h` | WiFi connection and setup network |
 | `kijelzo.h` | display selection, resolution, scaling macros (`SX`, `SY`, `S`) |
 | `p4/` | P4 board display, touch and RTC handling, larger fonts |
 | `font_*.c`, `lv_conf.h` | LVGL fonts (Roboto with Hungarian accents, seven-segment DSEG7) and LVGL configuration |
@@ -189,7 +191,8 @@ notifications and forwarding run as background tasks. Settings are stored in NVS
 | `p4/esp_lcd_touch_gsl3680.*` (with the GSL3680 controller firmware) | board vendor's example code | not stated |
 | `font_hu_*`, `p4/font_hu_*` | [Roboto](https://fonts.google.com/specimen/Roboto) | Apache-2.0 / OFL-1.1 |
 | `font_seg_*`, `p4/font_seg_*` | [DSEG7 Classic](https://github.com/keshikan/DSEG) | OFL-1.1 |
-| LVGL, WiFiManager (installed separately) | lvgl.io, tzapu | MIT |
+| LVGL (installed separately) | lvgl.io | MIT |
+| `docs/esp-web-tools/` (web installer, own build with esptool-js 0.7.0) | [ESP Web Tools](https://github.com/esphome/esp-web-tools) | Apache-2.0 |
 
 ## License
 

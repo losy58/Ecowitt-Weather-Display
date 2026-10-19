@@ -14,7 +14,7 @@ constexpr int ST_CF_X = SX(262), ST_CF_Y = SY(170), ST_CF_W = SX(500), ST_CF_H =
 constexpr int ST_ACT_W = SX(380);     // a WiFi / Újraindítás gomb szélessége
 constexpr uint32_t ST_IDLE_MS = 120000;            // ennyi tétlenség után bezárul (és ment)
 enum { ST_T_NIGHT, ST_T_LOC, ST_T_TZ, ST_T_WIFI, ST_T_SYS, ST_T_COUNT };
-enum { ST_A_NONE, ST_A_PORTAL, ST_A_RESTART, ST_A_LANG, ST_A_DEMO };
+enum { ST_A_NONE, ST_A_FORGET, ST_A_RESTART, ST_A_LANG, ST_A_DEMO };
 constexpr int ST_LANG_X = ST_CX + ST_ACT_W + SX(20), ST_LANG_W = SX(330);
 constexpr int ST_TZB_W = SX(110), ST_TZB_H = SY(70), ST_TZR_X = ST_CX + SX(620);   // időzóna: lapozó gombok
 constexpr int ST_WIFI_Y = SY(300), ST_SYS_Y = SY(440), ST_TXT_W = SX(730), ST_DEMO_Y = SY(360);   // ST_DEMO_Y: a Bemutató gomb (Rendszer fül)          // a WiFi / Rendszer fül gombjai, a szövegek szélessége
@@ -103,8 +103,12 @@ static void st_refresh_info() {
   if (WiFi.status() == WL_CONNECTED)
     snprintf(b, sizeof(b), tr("Hálózat: %s\nJelerősség: %d dBm (adóteljesítmény: %s)\nIP-cím: %s\nNév a hálózaton: " MDNS_HOST ".local", "Network: %s\nSignal: %d dBm (TX power: %s)\nIP address: %s\nName on the network: " MDNS_HOST ".local"),
              WiFi.SSID().c_str(), (int)WiFi.RSSI(), wifiTxName(), WiFi.localIP().toString().c_str());
-  else
-    snprintf(b, sizeof(b), tr("Nincs WiFi-kapcsolat.", "No WiFi connection."));
+  else {
+    char ln[96], ss[40];
+    wifiStatusLine(ln, sizeof(ln));
+    if (wifiSavedSsid(ss, sizeof(ss))) snprintf(b, sizeof(b), tr("%s\nMentett hálózat: %s", "%s\nSaved network: %s"), ln, ss);
+    else                               snprintf(b, sizeof(b), tr("%s\nNincs mentett hálózat.", "%s\nNo saved network."), ln);
+  }
   set_label_if_changed(st_wifi_info, b);
 
   const uint32_t up = millis() / 1000;
@@ -197,11 +201,18 @@ static void create_settings_screen() {
   g = st_grp[ST_T_WIFI];
   st_wifi_info = st_text(g, "", hu, COL_TEXT, ST_CX, ST_KY, ST_TXT_W);
   bp_button(g, ST_CX, ST_WIFI_Y, ST_ACT_W, tr("WiFi beállítása...", "Set up WiFi..."), 0x1F4A6A, NULL);
-  st_text(g, tr("Újraindul, és 5 percre elindítja a \"Weather-Setup\" hálózatot: csatlakozz rá telefonnal, válaszd ki a hálózatot "
-                "és add meg a jelszavát. Ha nem adsz meg újat, 5 perc múlva visszacsatlakozik a mentett hálózatra.",
-                "Restarts and opens the \"Weather-Setup\" network for 5 minutes: connect your phone to it, choose your network "
-                "and enter its password. If you do not set a new one, it reconnects to the saved network after 5 minutes."),
-          sm, COL_GREY, ST_CX, ST_WIFI_Y + SY(80), ST_TXT_W);
+  bp_button(g, ST_LANG_X, ST_WIFI_Y, ST_LANG_W, tr("WiFi elfelejtése...", "Forget WiFi..."), 0x6A2A1F, NULL);
+  {
+    char hb[480];
+    snprintf(hb, sizeof(hb), tr("WiFi beállítása: 5 percre elindul a \"%s\" hálózat (a mostani kapcsolat megmarad): csatlakozz rá "
+                                "telefonnal, válaszd ki a hálózatot és add meg a jelszavát. Ha nem adsz meg újat, a mostani marad.\n"
+                                "WiFi elfelejtése: törli a mentett hálózatot (pl. a kijelző továbbadása előtt), és elindul a beállító hálózat.",
+                                "Set up WiFi: the \"%s\" network opens for 5 minutes (the current connection stays): connect your phone to it, "
+                                "choose your network and enter its password. If you set no new one, the current one stays.\n"
+                                "Forget WiFi: deletes the saved network (e.g. before giving the display away) and opens the setup network."),
+             wifiApName());
+    st_text(g, hb, sm, COL_GREY, ST_CX, ST_WIFI_Y + SY(80), ST_TXT_W);
+  }
 
   // Rendszer
   g = st_grp[ST_T_SYS];
@@ -287,12 +298,16 @@ static void settings_close() {
   }
   if (st_action == ST_A_LANG) lang_save(!g_lang);
   if (st_action == ST_A_DEMO) demo_save(!g_demo);
-  if (st_action == ST_A_RESTART || st_action == ST_A_PORTAL || st_action == ST_A_LANG || st_action == ST_A_DEMO) {
-    LogOut.println(st_action == ST_A_PORTAL ? "WiFi beállítása: újraindítás a portálhoz" :
-                   st_action == ST_A_DEMO ? (g_demo ? "Bemutató mód ki: újraindítás" : "Bemutató mód be: újraindítás") : "Kézi újraindítás");
+  if (st_action == ST_A_FORGET) {   // a beállító hálózat indul, a WiFi-panel magától nyílik (wifiTakePortalOpened)
+    LogOut.println("WiFi elfelejtése (a kijelzőn)");
+    st_action = ST_A_NONE;
+    wifiForget();
+  }
+  if (st_action == ST_A_RESTART || st_action == ST_A_LANG || st_action == ST_A_DEMO) {
+    LogOut.println(st_action == ST_A_DEMO ? (g_demo ? "Bemutató mód ki: újraindítás" : "Bemutató mód be: újraindítás") : "Kézi újraindítás");
     hist_save();
     delay(300);
-    diag_mark_restart(st_action == ST_A_PORTAL ? RC_WIFISET : RC_MANUAL);
+    diag_mark_restart(RC_MANUAL);
     ESP.restart();
   }
 }
@@ -354,10 +369,18 @@ static void settings_tap(int x, int y) {
       break;
     }
     case ST_T_WIFI:
-      if (in_rect(x, y, ST_CX, ST_WIFI_Y, ST_ACT_W, ST_BTN_H)) {
-        st_action = ST_A_PORTAL;
+      if (in_rect(x, y, ST_CX, ST_WIFI_Y, ST_ACT_W, ST_BTN_H)) {   // nincs újraindulás: a beállító hálózat és a WiFi-panel
+        st_action = ST_A_NONE;
+        settings_close();
+        wifiPortalStart(5UL * 60UL * 1000UL);
+        wp_open();
+        return;
+      }
+      if (in_rect(x, y, ST_LANG_X, ST_WIFI_Y, ST_LANG_W, ST_BTN_H)) {
+        st_action = ST_A_FORGET;
         lv_label_set_text(st_cf_yes, tr("Igen", "Yes")); lv_label_set_text(st_cf_no, tr("Mégse", "Cancel"));
-        lv_label_set_text(st_cf_txt, tr("WiFi beállítása: a kijelző újraindul, és 5 percre elindítja a beállító portált. Mehet?", "WiFi setup: the display restarts and opens the setup portal for 5 minutes. Continue?"));
+        lv_label_set_text(st_cf_txt, tr("A mentett WiFi-hálózat törlődik, és elindul a beállító hálózat. Mehet?",
+                                        "The saved WiFi network is deleted and the setup network opens. Continue?"));
         lv_obj_set_hidden(st_cf, false);
       }
       break;

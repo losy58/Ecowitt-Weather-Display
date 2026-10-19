@@ -150,6 +150,11 @@ static void touch_task() {
   if (millis() - last_action < TOUCH_COOLDOWN_MS) return;
   last_action = millis();
 
+  // nyitott "Nincs WiFi" panel (a legfelső rétegen): csak a saját gombjai működnek
+  if (wp_is_open()) {
+    if (g == GESTURE_TAP) wp_tap(last_gx, last_gy);
+    return;
+  }
   // nyitott beállítás-képernyő: csak a saját gombjai működnek
   if (settings_is_open()) {
     if (g == GESTURE_TAP) settings_tap(last_gx, last_gy);
@@ -177,6 +182,12 @@ static void touch_task() {
     int seg = (last_gx - CH_TOG_X) / CH_TOG_SEG;   // Nap | Hét | Hónap
     ch_set_mode(seg < 0 ? 0 : seg > 2 ? 2 : seg);
     hist_update_charts();
+    return;
+  }
+  // beállító módban a felső sor "Nincs WiFi - beállítás" feliratára koppintva újra megnyílik a WiFi-panel
+  if (g == GESTURE_TAP && wifiPortalNoConn() && last_gy < SY(56) && lbl_warn &&
+      last_gx >= lv_obj_get_x(lbl_warn) && last_gx < lv_obj_get_x(lbl_warn) + lv_obj_get_width(lbl_warn)) {
+    wp_open();
     return;
   }
   if (g == GESTURE_TAP && (current_page == PAGE_HIST || current_page == PAGE_HIST2)) {

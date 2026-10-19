@@ -56,7 +56,9 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
   bemutatóra). A valódi előzményekhez nem nyúl.
 
 **Hálózat**
-- **WiFi-beállító portál** az első induláskor (WiFiManager); a hálózat később a kezelőoldalon is átállítható.
+- **WiFi-beállító hálózat**, ha nincs kapcsolat (`Weather-Setup`, a P4-en `Weather-Setup-P4`): a telefon magától megnyitja
+  a beállító oldalt; a kijelző két QR-kóddal mutatja a lépéseket, és közben is használható (a bemutató mód egy gombnyomás).
+  A hálózat később a kezelőoldalon és a kijelzőn is átállítható vagy elfelejthető.
   Mesh-hálózatban a legerősebb hozzáférési pontra csatlakozik.
 - **Webes kezelőoldal** (`http://idojaras.local/`, a P4-en `http://idojaras-p4.local/`): beállítások, OTA-frissítés,
   a konzolok nyers adatai, diagnosztika (indulások oka, összeomlás-összefoglaló), opcionális jelszóval.
@@ -119,7 +121,7 @@ A végleges fordítás **PlatformIO-val** készüljön: a `platformio.ini` olyan
 (`custom_sdkconfig`), amelyek nélkül flash-írás (mentés, OTA) közben elcsúszik vagy villan a kép.
 
 1. Telepítsd a [PlatformIO Core](https://platformio.org/install/cli)-t (vagy a VS Code-bővítményt).
-2. Töltsd le a tárolót. A könyvtárakat (LVGL 9.6.0, WiFiManager 2.0.17) a PlatformIO az első fordításkor magától
+2. Töltsd le a tárolót. A könyvtárat (LVGL 9.6.0) a PlatformIO az első fordításkor magától
    letölti.
 3. Fordítás és feltöltés USB-n:
    ```
@@ -157,7 +159,7 @@ Később a frissítés OTA-n is megy: a `.pio/build/<környezet>/firmware.bin` f
 | `/`, `/update` | kezelőoldal, beállítások, OTA-frissítés |
 | `/raw` | a konzolok utolsó küldésének összes mezője |
 | `/ecowitt` | adatfogadás a konzoloktól (`?fwd=1`: továbbküldött adat, nem küldi tovább) |
-| `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/ntfytest`, `/clearcrash` | a kezelőoldal műveletei |
+| `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`, `/ntfytest`, `/clearcrash` | a kezelőoldal műveletei |
 
 A kezelőoldal jelszava a beállításoknál adható meg; jelszó nélkül a helyi hálózaton bárki eléri. A kijelzőt ne tedd
 ki közvetlenül az internetre.
@@ -172,7 +174,7 @@ egy fordítási egységgé fűzi össze, ezért a számozás a sorrendet határo
 | `idojaras.ino` | include-ok, pin-ek, adattípusok, közös változók, hangolható konstansok (küszöbök, színek), beállítások |
 | `idojaras_02`…`_17e_*.ino` | kijelző, idő és fényerő, előzmények, előrejelzés, főoldal, konzolok, továbbküldés, grafikonok, web, diagnosztika, érintés, beállítások, értesítések, bemutató, óra és akku |
 | `idojaras_18_setup_loop.ino` | a felület felépítése, indulás, főciklus |
-| `wifi_manager.cpp/.h` | WiFi-kapcsolódás és beállító portál |
+| `wifi_manager.cpp/.h` | WiFi-kapcsolódás és beállító hálózat |
 | `kijelzo.h` | a kijelző kiválasztása, felbontás, skálázó makrók (`SX`, `SY`, `S`) |
 | `p4/` | a P4-es lap kijelző-, érintés- és óra-kezelése, nagyobb fontok |
 | `font_*.c`, `lv_conf.h` | LVGL-fontok (ékezetes Roboto, hétszegmenses DSEG7) és LVGL-beállítás |
@@ -190,7 +192,8 @@ ntfy-küldés és a továbbküldés megy háttérfeladatban. A beállítások az
 | `p4/esp_lcd_touch_gsl3680.*` (a GSL3680 vezérlő firmware-jével) | a lap gyártójának példaprogramja | nincs megjelölve |
 | `font_hu_*`, `p4/font_hu_*` | [Roboto](https://fonts.google.com/specimen/Roboto) | Apache-2.0 / OFL-1.1 |
 | `font_seg_*`, `p4/font_seg_*` | [DSEG7 Classic](https://github.com/keshikan/DSEG) | OFL-1.1 |
-| LVGL, WiFiManager (külön telepítendő) | lvgl.io, tzapu | MIT |
+| LVGL (külön telepítendő) | lvgl.io | MIT |
+| `docs/esp-web-tools/` (webes telepítő, saját fordítás esptool-js 0.7.0-val) | [ESP Web Tools](https://github.com/esphome/esp-web-tools) | Apache-2.0 |
 
 ## Licenc
 
