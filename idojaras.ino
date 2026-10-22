@@ -305,6 +305,20 @@ static bool cam_asleep();          // P4: a kamera szerint senki sincs a kijelz�
 static const char *batt_short();   // a kijelző Rendszer fülére (P4; a 7B-n üres)
 struct ExtMark { lv_obj_t *dot, *lbl; };   // a kinti min/max jele a Hőmérséklet grafikonon: pont és felirat (idojaras_10)
 struct DemoVals { float to, rh, p, w, g, dir, sol, rate, ti[3], hi[3], co2[3]; };   // a bemutató egy időpontra számolt értékei
+// Energia (energia_01): beállítások (be/ki, a P1 mérő és a dugalj címe, Growatt-token és -szerver, a napelemek
+// teljesítménye kWp-ben, 0: a napi diagram magától skáláz) és a mért adatok;
+// *_ms: az utolsó sikeres lekérés ideje (millis), 0: még nem volt; grid_w: + vétel, - visszatáplálás
+struct EnCfg { bool on; char p1[65], sk[65], gt[65], gs[65]; float kwp; char fw[130]; };   // fw: ide küldi tovább a napelem-adatot (címek vesszővel)
+struct EnData {
+  uint32_t p1_ms; float grid_w, u[3], i[3], imp_kwh, exp_kwh; int tariff;
+  uint32_t sk_ms; float boil_w, boil_kwh;
+  uint32_t gw_ms; float pv_w, pv_day, pv_month, pv_year; char gw_upd[24]; long plant_id; bool gw_remote;   // gw_remote: másik kijelzőtől kaptuk
+  char p1_err[48], sk_err[48], gw_err[80];   // az utolsó lekérés hibája (üres: sikeres)
+};
+// az energia oldal (energia_02) egy köre és egy áramlása (vonal, rajta mozgó pöttyök, érték)
+constexpr int EN_DOTS = 2;   // pötty vonalanként (fél periódussal eltolva)
+struct EnNode { lv_obj_t *ring, *title, *val, *sub; };
+struct EnFlow { lv_point_precise_t pts[2]; lv_obj_t *line, *dot[EN_DOTS], *val; bool active; };
 #define TR2(arr) (arr[g_lang])   // kétnyelvű tömb: arr[0] magyar, arr[1] angol
 
 // P4: amíg él, a kamera képfolyama áll (p4_cam_pause): minden flash-írás (Preferences-mentés, előzmény, OTA) köré kell.
@@ -316,6 +330,18 @@ struct CamPause {
   CamPause() { p4_cam_pause(true); }
   ~CamPause() { p4_cam_pause(false); }
 #endif
+};
+
+// Egyszerre csak egy HTTPS-kapcsolat (előrejelzés, Growatt): a TLS sok memóriát kér, a P4-en a belső RAM-ból.
+// Csak háttérfeladatban szabad használni (vár a másikra).
+static SemaphoreHandle_t tls_mutex() {
+  static StaticSemaphore_t buf;
+  static SemaphoreHandle_t m = xSemaphoreCreateMutexStatic(&buf);
+  return m;
+}
+struct TlsLock {
+  TlsLock() { xSemaphoreTake(tls_mutex(), portMAX_DELAY); }
+  ~TlsLock() { xSemaphoreGive(tls_mutex()); }
 };
 
 // A hiányzó kulcs olvasásakor a Preferences hibasort ír a naplóba (üres NVS: első indulás, teljes telepítés után),
@@ -470,7 +496,7 @@ constexpr int ZB_Y = SY(300), ZB_H = SY(286);                                   
 constexpr int ZF_X = SX(20), ZF_W = SX(326), ZC_X = SX(354), ZC_W = SX(286), ZK_X = SX(648), ZK_W = SX(356);      // előrejelzés, iránytű, óra
 
 enum { ICON_SUN, ICON_PARTLY, ICON_CLOUDY, ICON_RAIN, ICON_NIGHT, ICON_COUNT };
-enum { PAGE_DASH, PAGE_FC, PAGE_HIST, PAGE_HIST2, PAGE_DETAILS, PAGE_LOG, PAGE_COUNT };
+enum { PAGE_DASH, PAGE_ENERGY, PAGE_FC, PAGE_HIST, PAGE_HIST2, PAGE_DETAILS, PAGE_LOG, PAGE_COUNT };   // PAGE_ENERGY: csak bekapcsolt energiánál (energia_02)
 
 static lv_obj_t *page_dash = NULL, *page_details = NULL, *page_hist = NULL, *page_log = NULL, *lbl_log = NULL;
 static lv_obj_t *d_clock = NULL, *d_secs = NULL, *d_date = NULL, *d_week = NULL, *d_year = NULL;

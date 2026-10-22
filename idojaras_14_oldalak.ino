@@ -15,9 +15,10 @@ static void show_page(int p) {
   lv_obj_set_hidden(page_fc, p != PAGE_FC);
   lv_obj_set_hidden(page_log, p != PAGE_LOG);
   lv_obj_set_hidden(page_details, p != PAGE_DETAILS);
+  en_page_show(p == PAGE_ENERGY);
 
   // a fejléc bal oldalán az oldal neve (a főoldalon üres); a grafikonoldalakon mellette a Nap | Hét | Hónap kapcsoló
-  static const char *PAGE_NAME[PAGE_COUNT] = {"", tr("Előrejelzés", "Forecast"), tr("Kint", "Outdoor"), tr("Bent", "Indoor"), tr("Részletes adatok", "Details"), tr("Napló", "Log")};
+  static const char *PAGE_NAME[PAGE_COUNT] = {"", tr("Energia", "Energy"), tr("Előrejelzés", "Forecast"), tr("Kint", "Outdoor"), tr("Bent", "Indoor"), tr("Részletes adatok", "Details"), tr("Napló", "Log")};
   lv_label_set_text(lbl_info, PAGE_NAME[p]);
   const bool hist_page = (p == PAGE_HIST || p == PAGE_HIST2);
   if (ch_toggle) lv_obj_set_hidden(ch_toggle, !hist_page);
@@ -45,16 +46,17 @@ static void log_refresh() {
 
 static void page_task() {
   if (current_page == PAGE_LOG) log_refresh();
+  en_page_task();
   uint32_t idle_ms = millis() - page_since;
 
   if (PAGE_ROTATE) {
     uint32_t limit = (uint32_t)(current_page == PAGE_DASH ? DASH_SECONDS : DETAILS_SECONDS) * 1000UL;
-    if (idle_ms >= limit) show_page((current_page + 1) % PAGE_COUNT);
+    if (idle_ms >= limit) show_page(page_step(current_page, 1));
     return;
   }
 
   // Érintéses használatnál a főoldal az "alap": a többi oldal nyugalom után visszaugrik
-  if (current_page != PAGE_DASH && DETAILS_RETURN_SECONDS > 0 &&
+  if (current_page != PAGE_DASH && current_page != PAGE_ENERGY && DETAILS_RETURN_SECONDS > 0 &&   // az energia oldal marad
       idle_ms >= (uint32_t)DETAILS_RETURN_SECONDS * 1000UL) {
     show_page(PAGE_DASH);
     return;

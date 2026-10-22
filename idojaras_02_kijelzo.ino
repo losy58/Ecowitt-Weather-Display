@@ -71,6 +71,14 @@ static int log_vprintf_hook(const char *fmt, va_list ap) {
 
 static void p4_log(const char *msg) { LogOut.println(msg); }   // a P4-es kijelzőkezelő üzenetei a Naplóba
 
+// a LogOut előtti fájloknak (energia_*): előre deklarálva onnan is hívható
+static void logout_printf(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  log_vprintf_hook(fmt, ap);
+  va_end(ap);
+}
+
 static uint8_t g_io_state = 0xFF;   // a 0x24-es IO-bovito kimeneti allapota (a panel-reset ehhez nyul)
 
 void init_io_expander()

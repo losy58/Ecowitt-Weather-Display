@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 // Firmware-frissítés a böngészőből: http://idojaras.local/ vagy http://<a lap IP-je>/  (.bin feltöltése)
 // ---------------------------------------------------------------------------
-static const char *FW_NAME = "Ecowitt Weather Display v1.3.2" FW_BOARD;
+static const char *FW_NAME = "Ecowitt Weather Display v1.4.0" FW_BOARD;
 static const char *MDNS_NAME = MDNS_HOST;   // a név a hálózaton (kijelzo.h): idojaras.local, ill. idojaras-p4.local
 
 static lv_obj_t *ota_ov = NULL, *ota_l1 = NULL, *ota_l2 = NULL, *ota_fill = NULL;
@@ -150,6 +150,7 @@ static void handle_settings_save() {
     cp.putBool("cam", cfg.cam_on);
     cp.end();
   }
+  en_settings_save(*cur_srv);   // energia (energia_01)
   // továbbküldés másik kijelzőre (a http:// előtag és a záró / elhagyható)
   if (cur_srv->hasArg("fw_h")) {
     String h = cur_srv->arg("fw_h"); h.trim();
@@ -438,6 +439,7 @@ static String settings_html() {
           "<p style='color:#aaa;margin:0'>Silent during the night mode period (by clock or by sunset, see above), even if dimming "
           "is off. Also adjustable on the display: Settings / System.</p>");
 #endif
+  h += en_settings_html();
   h += forward_html();
   h += tr("<h3>Jelszó</h3>", "<h3>Password</h3>");
   h += "<label style='display:block;margin-top:10px'><input type='checkbox' name='chpw' id='chpw' style='width:auto;margin:0 8px 0 0'>";

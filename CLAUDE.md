@@ -21,7 +21,7 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   Előtte ellenőrizve: a kódban és a dokumentációban nincs személyes adat (ntfy-téma, otthoni koordináta, IP, e-mail;
   a képekben EXIF/GPS); az ntfy-témát a felhasználó lecserélte. A Claude-os nyomok (Co-Authored-By sor, `CLAUDE.md`,
   `.claude/`) maradhatnak: nem titok (a felhasználó döntése). Új személyes adat ezután se kerüljön a tárolóba.
-- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2): a felhasználóknak kész programfájlok, fordítás nélkül (README:
+- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0): a felhasználóknak kész programfájlok, fordítás nélkül (README:
   „Telepítés fordítás nélkül”). Kijelzőnként a `.pio/build/<env>/firmware.factory.bin` (első telepítés USB-n a `0x0`
   címre: betöltő – a 7B-n 0x0, a P4-en 0x2000 –, partíciótábla, program; az NVS-t üresre írja, az FFat-et nem érinti)
   és a `firmware.bin` (OTA). Nevük: `Ecowitt-Weather-Display-vX.Y.Z-7B-factory.bin`, `…-7B-ota.bin`, `…-P4-factory.bin`,
@@ -78,7 +78,9 @@ egy fordítási egységgé fűzi össze, ezért:
   rajzolás, grafikonok, web, diagnosztika, érintés, fényerő panel, `06b`: a konzolok adatainak továbbküldése másik
   kijelzőre, `17b`: Beállítások képernyő a fogaskerékkel,
   `17c`: telefonos értesítések az ntfy.sh-n, háttérfeladatból, `17d`: bemutató mód, `17e`: P4: óra, akku, hang,
-  kamerás fényerő, `17f`: „Nincs WiFi” panel).
+  kamerás fényerő, `17f`: „Nincs WiFi” panel, `17g`: képernyőkép). Az `energia_01/02_*.ino` fájlok (lásd „Energia”) az
+  `idojaras.ino` UTÁN, de az `idojaras_02..` ELŐTT fűződnek be (`e` < `i`): a későbbi fájlok `static` függvényeit előre
+  deklarálni kell (lásd a fájlok elejét), a függvényparaméterben szereplő típusok az `idojaras.ino`-ba kerülnek.
   A számozás határozza meg a sorrendet (a `17b` a `17_` után jön, mert `_` < `b`);
   egy fájl csak a korábban definiált (vagy előre deklarált) `static` függvényeket használhatja.
 - `idojaras_18_setup_loop.ino`: `create_ui()`, `app_setup()` (kijelző → érintés → FFat → beállítások → WiFi → webszerver
@@ -141,11 +143,51 @@ nap összesítője áll, **kivéve a Hőmérsékletet**: ott a „Max” / „Mi
 - Diagnosztika: az utolsó indulások oka és a coredump partícióba mentett összeomlás (`idojaras_12_diagnosztika.ino`).
 
 **Webes végpontok** (`app_setup()`): `/` és `/update` (kezelőoldal + OTA), `/settings`, `/raw` (konzolok nyers adatai),
-`/ecowitt` (adatfogadás; `?fwd=1`: továbbküldött adat), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`; minden ismeretlen cím a beállító hálózaton a
+`/ecowitt` (adatfogadás; `?fwd=N`: továbbküldött adat, legfeljebb 3 lépés), `/energia` (POST: másik kijelzőtől továbbküldött napelem-adat), `/screenshot` (lásd „Képernyőkép”), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`; minden ismeretlen cím a beállító hálózaton a
 beállító oldalra irányít (`onNotFound`). mDNS név: `idojaras`.
 
 **Memória:** a belső RAM szűkös (`INTERNAL_RAM_RESERVE` marad a WiFi-nek); a nagy pufferek, az LVGL és az mbedTLS
 a PSRAM-ot használja. Nagy új foglalást PSRAM-ba tegyél (`MALLOC_CAP_SPIRAM`).
+
+## Energia (v1.4.0, 2026.10.22., a felhasználó kérése)
+
+Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mérő (hálózat), egy HomeWizard Energy Socket (boyler)
+és egy Growatt napelem adatai. Kód: `energia_01_adatok.ino` (adatok, háttérfeladat, web), `energia_02_oldal.ino` (az oldal).
+- **Beállítások** (webes Beállítások, „Energia” rész): P1 és dugalj címe (`en_p1`, `en_sk`), Growatt-token (`en_gt`, jelszómező, az
+  oldal csak a végét mutatja) és -szerver (`en_gs`, alapból `openapi.growatt.com`), a napelemek kWp-je (`en_kwp`, a diagram
+  tetejét adja; üresen a mai termelési csúcshoz igazodik), a napelem-adat továbbküldésének címei (`en_fw`, vesszővel). A token
+  és a címek NEM kerülhetnek a kódba (a tároló nyilvános).
+- **Lekérés** (`en_worker`, háttérfeladat, PSRAM-verem): P1 és dugalj 2 mp-enként (Local API v1, a HomeWizard appban eszközönként
+  be kell kapcsolni: `/api/v1/data`), a Growatt 5 percenként EGY kéréssel (`/v1/plant/data?plant_id=…`: pillanatnyi teljesítmény
+  kW-ban, napi / havi / éves termelés; az erőmű azonosítóját csak egyszer, a `/v1/plant/list`-ből kérjük). A JSON-t könyvtár nélkül
+  dolgozzuk fel (`en_json_*`; a Growatt a számokat gyakran szövegként adja).
+- **Growatt 10012 („error_frequently_access”):** a Growatt a sűrű lekérdezést elutasítja, és ugyanaz a token több kijelzőn
+  egymást is kiüti. Ezért a tokent csak EGY kijelzőn szabad megadni; az továbbküldi a napelem-adatot (`en_fw`: HTTP POST a cél
+  `/energia` címére, `en_fw_send()`), a többi fogadja (`handle_energia_post()`, `EnData::gw_remote`). 10012 után 10 percet vár, az
+  induló lekérés 0-30 mp véletlen késéssel indul. A fogadott adat újraindítás után a következő küldésig (legfeljebb 5 perc) hiányzik.
+  A HomeWizard P1 `active_power_w` előjeles (+ vétel, - visszatáplálás); fázisonkénti teljesítményt NEM ad, csak feszültséget és egész
+  amperben, előjel nélkül mért áramot, ezért fázisonkénti teljesítményt nem számolunk.
+- **Mai értékek:** a nap eleji mérőállások (`EnDay`, NVS `cfg`/`en_day`, naponta egyszer írva; ha a kijelző napközben indul először, az
+  indulás idejétől számol, ezt kiírja) → mai vétel / leadás / boyler.
+- **Napi diagram:** `/energia.bin` (FFat, `EnPvDay`, magic `ENV2`): 288 db 5 perces szelet, a termelés (W, a felhő időbélyege szerinti
+  szeletbe) és a hálózati teljesítmény átlaga (a P1 mintáiból; a szelet végén mentve). Kék = a termelés saját fogyasztásra
+  használt része (termelés - leadás), lila = vétel (a kékre rakva), zöld = termelés. 0-24 óra; a skála a termelési csúcshoz igazodik
+  (0,5 / 1 / 1,5 / 2 kW, felette egész kW), a nagyobb fogyasztás a tetején levágva. Új szelet-formátumnál új magic kell.
+- **Az oldal** (`PAGE_ENERGY`, a főoldal után): csak bekapcsolt energiánál van a lapozásban (`page_step()`), NEM ugrik vissza magától a
+  főoldalra, az elemei az első megnyitáskor jönnek létre (LVGL memória). A vételnél a hálózat lila, visszatáplálásnál zöld.
+  Bemutató módban nincs lekérés és az oldal sincs a lapozásban (még nincs kitalált energia-adat).
+- **S3-as 7B: OTA után az újraindítás oka néha `RTCWDT_RTC_RST`** (a szoftveres reset nem fejeződik be, az ESP-IDF tartalék RTC
+  watchdogja végzi, kb. 1 mp múlva; a kijelző ártalmatlanul elindul). A `diag_init()` ezt kért újraindításnak jegyzi, ha a program
+  maga kért újraindítást (`diag_mark_restart`). A P4-en nem fordult elő; az okát nem találtuk meg (a háttérfeladat leállítása
+  az újraindítás előtt nem segített).
+
+## Képernyőkép (v1.4.0)
+
+`GET /screenshot[?oldal=fooldal|energia|elorejelzes|kint|bent|reszletes|naplo]` (a kezelőoldal jelszavával): az aktív LVGL
+képernyőt 24 bites BMP-ben adja (`idojaras_17g_kepernyokep.ino`, `LV_USE_SNAPSHOT 1`; a puffer PSRAM-ban, saját
+`lv_draw_buf_t`-vel, mert az LVGL szűk memóriájából nem foglalható ekkora). Az `oldal=` előbb átvált arra az oldalra, és az marad. A
+főszálban fut: 4-9 mp, a kijelző addig áll. Fejlesztéshez: `curl -o k.bmp "http://<kijelző>/screenshot?oldal=energia"`, majd
+`sips -s format png k.bmp --out k.png` (Mac). Így a kinézet fotó nélkül is ellenőrizhető (7B: 1024x600, P4: 1280x800).
 
 ## Munkamenet
 

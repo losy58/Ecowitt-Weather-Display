@@ -145,6 +145,7 @@ void app_setup() {
   LogOut.println(ffat_ok ? "FFat OK" : "FFat HIBA - az elozmenyek nem maradnak meg ujrainditas utan");
 
   cfg_load();
+  en_cfg_load();   // energia (energia_01)
   cfg_apply_tz();
   p4_hw_setup();   // P4: az idő a lap órájából (WiFi nélkül is), az akku mérése
   wifiSetCallbacks(ui_pump, ui_status);
@@ -162,6 +163,8 @@ void app_setup() {
   my_server.on("/settings", HTTP_POST, handle_settings_save);
   my_server.on("/raw", HTTP_GET, handle_raw_page);
   if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
+  my_server.on("/screenshot", HTTP_GET, handle_screenshot);   // képernyőkép BMP-ben (idojaras_17g)
+  my_server.on("/energia", HTTP_POST, handle_energia_post);   // a másik kijelzőtől érkező napelem-adat (energia_01)
   my_server.on("/ecowitt", HTTP_POST, handle_ecowitt_post);
   my_server.on("/ecowitt", HTTP_GET, handle_ecowitt_post);
   my_server.on("/clearcrash", HTTP_POST, handle_clear_crash);
@@ -223,6 +226,7 @@ void app_loop() {
   p4_hw_task();
   hist_task();
   fc_loop();
+  en_loop();
 
   delay(5);
 }

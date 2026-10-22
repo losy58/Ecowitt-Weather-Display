@@ -219,5 +219,5 @@ static void touch_task() {
   if (g == GESTURE_SWIPE_RIGHT) dir = TOUCH_SWIPE_INVERT ? 1 : -1;
 
   LogOut.printf("Érintés: %s\n", g == GESTURE_TAP ? "koppintás" : (g == GESTURE_SWIPE_LEFT ? "balra húzás" : "jobbra húzás"));
-  show_page((current_page + dir + PAGE_COUNT) % PAGE_COUNT);
+  show_page(page_step(current_page, dir));   // a kikapcsolt energia oldalt kihagyja
 }

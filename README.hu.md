@@ -46,6 +46,11 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
   havi (400 napos napi összesítő) nézetben; a hőmérséklet-grafikonon a látható időszak kinti minimuma és maximuma
   jelölve; koppintásra teljes képernyőn.
 - **Részletes adatok** és **Napló** oldal (a program eseményei).
+- **Energia** (nem kötelező, alapból ki): HomeWizard P1 mérő (hálózat), HomeWizard Energy Socket (pl. boyler) és
+  Growatt napelem. Energiaáramlás-ábra (a mozgó pöttyök az irányt mutatják: vétel lila, visszatáplálás zöld), a mai vétel /
+  leadás és a boyler fogyasztása, a három fázis feszültsége és árama, és egy 24 órás diagram a termelésről, a saját
+  fogyasztásról és a hálózati vételről. A kezelőoldalon állítható; a Growatt-token csak egy kijelzőn kell, az továbbküldi
+  a napelem adatát a többinek (a Growatt a sűrű lekérdezést elutasítja).
 - **Több helyiség:** legfeljebb 3 konzol (pl. WS3910, GW3000, WN1821) benti adatai külön; a kinti adat (pl. WS90) az
   elsőtől jön, a többitől csak akkor, ha az első 2 percig hallgat.
 - **Figyelmeztetések** színnel: fagy, hőség, erős lökés, magas UV, magas CO2 („Szellőztess”), lemerülő elemek,
@@ -64,8 +69,10 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
   a konzolok nyers adatai, diagnosztika (indulások oka, összeomlás-összefoglaló), opcionális jelszóval.
 - **Telefonos értesítések** az [ntfy.sh](https://ntfy.sh/)-n (ingyenes, regisztráció nélkül): fagy, eső, szellőztetés,
   lemerülő elem, elakadt adat, összeomlás; egyenként ki-be kapcsolhatók.
-- **Továbbküldés másik kijelzőre:** a konzolok általában csak egy címre küldenek; a kijelző a kapott adatokat
-  továbbküldheti egy második kijelzőnek.
+- **Továbbküldés másik kijelzőkre:** a konzolok általában csak egy címre küldenek; a kijelző a kapott adatokat
+  továbbküldheti egy másiknak (láncban legfeljebb 3 lépésig).
+- **Képernyőkép:** a `http://<kijelző>/screenshot` a mostani képernyőt adja BMP-ben; az `?oldal=energia` (vagy `fooldal`,
+  `elorejelzes`, `kint`, `bent`, `reszletes`, `naplo`) előbb átvált arra az oldalra. A kijelző pár másodpercre megáll.
 
 **Csak a P4-en:** a lap saját órája (RX8025T, gombelemmel) WiFi nélkül is pontos időt ad; a Li-akku feszültsége
 látszik, és áramszünetről értesítést küld; hangjelzés, amikor megjelenik a „Szellőztess” (be/ki, hangerő; az éjszakai
@@ -159,7 +166,9 @@ Később a frissítés OTA-n is megy: a `.pio/build/<környezet>/firmware.bin` f
 |---|---|
 | `/`, `/update` | kezelőoldal, beállítások, OTA-frissítés |
 | `/raw` | a konzolok utolsó küldésének összes mezője |
-| `/ecowitt` | adatfogadás a konzoloktól (`?fwd=1`: továbbküldött adat, nem küldi tovább) |
+| `/ecowitt` | adatfogadás a konzoloktól (`?fwd=N`: továbbküldött adat, legfeljebb 3-szor küldi tovább) |
+| `/energia` | másik kijelzőtől továbbküldött napelem-adat (POST) |
+| `/screenshot` | a mostani képernyő BMP-ben (`?oldal=<oldal>` előbb átvált arra az oldalra) |
 | `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`, `/ntfytest`, `/clearcrash` | a kezelőoldal műveletei |
 
 A kezelőoldal jelszava a beállításoknál adható meg; jelszó nélkül a helyi hálózaton bárki eléri. A kijelzőt ne tedd
@@ -173,7 +182,8 @@ egy fordítási egységgé fűzi össze, ezért a számozás a sorrendet határo
 | Fájl | Tartalom |
 |---|---|
 | `idojaras.ino` | include-ok, pin-ek, adattípusok, közös változók, hangolható konstansok (küszöbök, színek), beállítások |
-| `idojaras_02`…`_17e_*.ino` | kijelző, idő és fényerő, előzmények, előrejelzés, főoldal, konzolok, továbbküldés, grafikonok, web, diagnosztika, érintés, beállítások, értesítések, bemutató, óra és akku |
+| `energia_01_adatok.ino`, `energia_02_oldal.ino` | energia: HomeWizard / Growatt adatok háttérfeladatban, webes beállítások, napelem-adat továbbküldése; az Energia oldal és diagramja |
+| `idojaras_02`…`_17g_*.ino` | kijelző, idő és fényerő, előzmények, előrejelzés, főoldal, konzolok, továbbküldés, grafikonok, web, diagnosztika, érintés, beállítások, értesítések, bemutató, óra és akku, képernyőkép |
 | `idojaras_18_setup_loop.ino` | a felület felépítése, indulás, főciklus |
 | `wifi_manager.cpp/.h` | WiFi-kapcsolódás és beállító hálózat |
 | `kijelzo.h` | a kijelző kiválasztása, felbontás, skálázó makrók (`SX`, `SY`, `S`) |
@@ -181,8 +191,8 @@ egy fordítási egységgé fűzi össze, ezért a számozás a sorrendet határo
 | `font_*.c`, `lv_conf.h` | LVGL-fontok (ékezetes Roboto, hétszegmenses DSEG7) és LVGL-beállítás |
 
 A program egyszálú, nem blokkoló főciklussal fut (60 mp-es watchdog); csak az előrejelzés letöltése, az
-ntfy-küldés és a továbbküldés megy háttérfeladatban. A beállítások az NVS-ben, az előzmények az FFat-on (`/hist.bin`,
-`/days.bin`) tárolódnak. A részletes fejlesztői leírás, buktatókkal: [CLAUDE.md](CLAUDE.md).
+ntfy-küldés, a továbbküldés és az energia-adatok lekérése megy háttérfeladatban. A beállítások az NVS-ben, az előzmények az FFat-on (`/hist.bin`,
+`/days.bin`, `/energia.bin`) tárolódnak. A részletes fejlesztői leírás, buktatókkal: [CLAUDE.md](CLAUDE.md).
 
 ## Harmadik féltől származó részek
 

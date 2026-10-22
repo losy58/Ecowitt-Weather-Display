@@ -1,10 +1,12 @@
 // A konzoloktól kapott adatok továbbküldése egy másik kijelzőre (pl. a 7B-ről a P4-re): a konzolok általában csak egy
 // címre küldenek. A beérkezett mezők urlencoded alakban egy kis sorba kerülnek, és egy háttérfeladat küldi el őket
 // HTTP POST-tal a cél /ecowitt címére; a főciklus nem vár rá. Ha a cél nem érhető el, a sor betelik, és az újak elmaradnak.
-// A továbbküldött kérés címében ?fwd=1 van: az ilyet a fogadó nem küldi tovább (két kijelző nem küldheti körbe egymásnak).
+// A továbbküldött kérés címében ?fwd=N van (N: hányadik továbbküldés): a fogadó is továbbküldheti (pl. 7B -> P4 -> egy
+// harmadik kijelző), de legfeljebb FW_MAX_HOPS lépésig, így két egymásra mutató kijelző sem küldi körbe végtelenül.
 // (Az idojaras.ino része: az Arduino IDE és a PlatformIO a fájlokat ábécésorrendben, egy programmá fűzi össze.)
 
 constexpr int FW_QUEUE = 4;
+constexpr int FW_MAX_HOPS = 3;        // egy konzol-küldés legfeljebb ennyi továbbküldésen megy át
 constexpr int FW_CONNECT_MS = 2000;   // kapcsolódás legfeljebb ennyi ideig
 constexpr int FW_TIMEOUT_MS = 3000;   // válaszra legfeljebb ennyi ideig várunk
 static QueueHandle_t fw_q = NULL;     // FwMsg mutatók (a puffer PSRAM-ban; a feladat szabadítja fel)
@@ -84,7 +86,9 @@ static void fw_drop_one(const char *why) {
 
 // A handle_ecowitt_post()-ból: a most fogadott küldés sorba tétele (nem blokkol)
 static void fw_push() {
-  if (!cfg.fw_on || !cfg.fw_host[0] || my_server.hasArg("fwd")) return;   // kikapcsolva, nincs cél, vagy maga is továbbküldött adat
+  if (!cfg.fw_on || !cfg.fw_host[0]) return;   // kikapcsolva vagy nincs cél
+  const int hops = my_server.hasArg("fwd") ? (int)my_server.arg("fwd").toInt() : 0;   // a régi programok fwd=1-et küldenek
+  if (hops < 0 || hops >= FW_MAX_HOPS) return;
   if (!fw_q) {
     fw_q = xQueueCreate(FW_QUEUE, sizeof(FwMsg *));
     if (!fw_q) return;
@@ -97,13 +101,13 @@ static void fw_push() {
   if (uxQueueSpacesAvailable(fw_q) == 0) { fw_drop_one("a sor tele (a cél nem válaszol?), a küldés elmaradt"); return; }
   FwMsg *m = (FwMsg *)heap_caps_malloc(sizeof(FwMsg), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   if (!m) { fw_drop_one("nincs memória"); return; }
-  snprintf(m->url, sizeof(m->url), "http://%s/ecowitt?fwd=1", cfg.fw_host);
+  snprintf(m->url, sizeof(m->url), "http://%s/ecowitt?fwd=%d", cfg.fw_host, hops + 1);
   m->len = 0;
   m->body[0] = 0;
   bool fits = true;
   for (int i = 0; i < my_server.args() && fits; i++) {
     const String name = my_server.argName(i);
-    if (name == "plain") continue;   // a WebServer a nem urlencoded törzset is argumentumként adja
+    if (name == "plain" || name == "fwd") continue;   // a WebServer a nem urlencoded törzset és a cím paramétereit is argumentumként adja
     if (m->len) m->body[m->len++] = '&';
     fits = fw_append_enc(*m, name) && m->len + 1 < sizeof(m->body);
     if (fits) { m->body[m->len++] = '='; fits = fw_append_enc(*m, my_server.arg(i)); }

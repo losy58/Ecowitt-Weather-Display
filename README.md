@@ -46,6 +46,11 @@ Photos of the display in demo mode (made-up data, English interface).
   and month (400-day daily summary) views; the outdoor minimum and maximum of the shown period are marked on the
   temperature chart; tap for full screen.
 - **Details** and **Log** pages.
+- **Energy** (optional, off by default): a HomeWizard P1 meter (grid), a HomeWizard Energy Socket (e.g. a water heater)
+  and a Growatt solar plant. A power-flow diagram (moving dots show the direction: import purple, export green), today's
+  import / export and heater consumption, voltage and current of the three phases, and a 24-hour chart of production,
+  own use and grid import. Set up on the web page; the Growatt token is entered on one display only, which forwards
+  the solar data to the others (Growatt rejects frequent requests).
 - **Several rooms:** indoor data of up to 3 consoles (e.g. WS3910, GW3000, WN1821) shown separately; outdoor data
   (e.g. WS90) comes from the first one, from the others only if the first is silent for 2 minutes.
 - **Colour warnings:** frost, heat, strong gusts, high UV, high CO2 ("ventilate"), low batteries, stale data.
@@ -63,8 +68,10 @@ Photos of the display in demo mode (made-up data, English interface).
   data, diagnostics (reset reasons, crash summary), optional password.
 - **Phone notifications** via [ntfy.sh](https://ntfy.sh/) (free, no sign-up): frost, rain, ventilation, low battery,
   stale data, crash; each can be switched on or off.
-- **Forwarding to a second display:** consoles usually upload to a single address; the display can forward the
-  received data to another one.
+- **Forwarding to other displays:** consoles usually upload to a single address; the display can forward the
+  received data to another one (up to 3 hops in a chain).
+- **Screenshot:** `http://<display>/screenshot` returns the current screen as a BMP; `?oldal=energia` (or `fooldal`,
+  `elorejelzes`, `kint`, `bent`, `reszletes`, `naplo`) switches to that page first. It freezes the display for a few seconds.
 
 **P4 only:** the board's RTC (RX8025T with coin cell) keeps time without WiFi; the Li battery voltage is shown and a
 notification is sent on power loss; a sound alert when "ventilate" appears (on/off, volume; silent during the night
@@ -157,7 +164,9 @@ Later updates can go over the air: upload `.pio/build/<environment>/firmware.bin
 |---|---|
 | `/`, `/update` | web page, settings, OTA update |
 | `/raw` | all fields of each console's last upload |
-| `/ecowitt` | data from the consoles (`?fwd=1`: forwarded data, not forwarded again) |
+| `/ecowitt` | data from the consoles (`?fwd=N`: forwarded data, forwarded at most 3 times) |
+| `/energia` | solar data forwarded from another display (POST) |
+| `/screenshot` | the current screen as a BMP (`?oldal=<page>` switches to a page first) |
 | `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`, `/ntfytest`, `/clearcrash` | web page actions |
 
 Without a password anyone on the local network can reach the web page. Do not expose the display directly to the
@@ -172,7 +181,8 @@ in Hungarian.
 | File | Content |
 |---|---|
 | `idojaras.ino` | includes, pins, data types, shared variables, tunable constants (thresholds, colours), settings |
-| `idojaras_02`…`_17e_*.ino` | display, time and brightness, history, forecast, dashboard, consoles, forwarding, charts, web, diagnostics, touch, settings, notifications, demo, RTC and battery |
+| `energia_01_adatok.ino`, `energia_02_oldal.ino` | energy: HomeWizard / Growatt data in a background task, web settings, solar forwarding; the Energy page and its charts |
+| `idojaras_02`…`_17g_*.ino` | display, time and brightness, history, forecast, dashboard, consoles, forwarding, charts, web, diagnostics, touch, settings, notifications, demo, RTC and battery, screenshot |
 | `idojaras_18_setup_loop.ino` | UI construction, startup, main loop |
 | `wifi_manager.cpp/.h` | WiFi connection and setup network |
 | `kijelzo.h` | display selection, resolution, scaling macros (`SX`, `SY`, `S`) |
@@ -180,8 +190,8 @@ in Hungarian.
 | `font_*.c`, `lv_conf.h` | LVGL fonts (Roboto with Hungarian accents, seven-segment DSEG7) and LVGL configuration |
 
 The program runs a single-threaded, non-blocking main loop (60 s watchdog); only the forecast download, ntfy
-notifications and forwarding run as background tasks. Settings are stored in NVS, history on FFat (`/hist.bin`,
-`/days.bin`). Detailed developer notes (in Hungarian): [CLAUDE.md](CLAUDE.md).
+notifications, forwarding and the energy data run as background tasks. Settings are stored in NVS, history on FFat (`/hist.bin`,
+`/days.bin`, `/energia.bin`). Detailed developer notes (in Hungarian): [CLAUDE.md](CLAUDE.md).
 
 ## Third-party components
 

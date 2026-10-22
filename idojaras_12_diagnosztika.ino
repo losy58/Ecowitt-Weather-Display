@@ -54,6 +54,9 @@ static void diag_init() {
   cur.reason = (uint8_t)esp_reset_reason();
   cur.cause = (rst_magic == RST_MAGIC) ? (uint8_t)rst_cause : RC_NONE;
   rst_magic = 0;
+  // a program maga kért újraindítást, de a szoftveres reset nem fejeződött be, és az ESP-IDF tartalék RTC watchdogja
+  // (RTCWDT_RTC_RST) végezte el: ez kért újraindítás, nem watchdog-hiba
+  if (cur.cause != RC_NONE && cur.reason == ESP_RST_WDT) cur.reason = ESP_RST_SW;
   if (cur.cause != RC_PANEL) panel_tries = 0;
 
   CamPause cam_pause_;   // P4: a kamera áll a mentés alatt

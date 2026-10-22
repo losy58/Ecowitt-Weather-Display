@@ -306,6 +306,9 @@ static void handle_update_page() {
   h += cam_text();
   h += "</p>";
 #endif
+  h += tr("<p>Energia: ", "<p>Energy: ");
+  h += en_text();
+  h += "</p>";
   if (g_demo) h += tr("<p style='color:#ffd54f'><b>Bemutató mód:</b> a kijelző kitalált adatokat mutat, a konzolok adatait nem használja, "
                       "és nem ment előzményt. Kikapcsolás a kijelzőn: Beállítások / Rendszer / Bemutató kikapcsolása.</p>",
                       "<p style='color:#ffd54f'><b>Demo mode:</b> the display shows made-up data, does not use the consoles' data and "

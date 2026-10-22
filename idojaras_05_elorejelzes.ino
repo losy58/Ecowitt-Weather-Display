@@ -95,6 +95,7 @@ static void fc_fetch_once() {
   Forecast f = {};
   char err[48] = "";
   {
+    TlsLock tls_lock_;   // egyszerre csak egy HTTPS-kapcsolat (a Growatt-lekéréssel, energia_01)
     WiFiClientSecure cli;
     cli.setInsecure();   // a tanúsítványt nem ellenőrizzük (időjárás-adat), a forgalom így is titkosított
     HTTPClient http;
