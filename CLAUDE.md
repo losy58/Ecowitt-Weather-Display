@@ -21,7 +21,7 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   Előtte ellenőrizve: a kódban és a dokumentációban nincs személyes adat (ntfy-téma, otthoni koordináta, IP, e-mail;
   a képekben EXIF/GPS); az ntfy-témát a felhasználó lecserélte. A Claude-os nyomok (Co-Authored-By sor, `CLAUDE.md`,
   `.claude/`) maradhatnak: nem titok (a felhasználó döntése). Új személyes adat ezután se kerüljön a tárolóba.
-- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0; 2026.10.25.: v1.4.1): a felhasználóknak kész programfájlok, fordítás nélkül (README:
+- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0; 2026.10.25.: v1.4.1, v1.4.2): a felhasználóknak kész programfájlok, fordítás nélkül (README:
   „Telepítés fordítás nélkül”). Kijelzőnként a `.pio/build/<env>/firmware.factory.bin` (első telepítés USB-n a `0x0`
   címre: betöltő – a 7B-n 0x0, a P4-en 0x2000 –, partíciótábla, program; az NVS-t üresre írja, az FFat-et nem érinti)
   és a `firmware.bin` (OTA). Nevük: `Ecowitt-Weather-Display-vX.Y.Z-7B-factory.bin`, `…-7B-ota.bin`, `…-P4-factory.bin`,

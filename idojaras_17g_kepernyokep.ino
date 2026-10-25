@@ -27,7 +27,9 @@ static void handle_screenshot() {
   if (s.hasArg("oldal")) {
     const int p = screenshot_page(s.arg("oldal"));
     if (p < 0) {
-      s.send(400, "text/plain; charset=utf-8", "Ismeretlen oldal. Lehet: fooldal, energia, elorejelzes, kint, bent, reszletes, naplo (vagy 0..5).");
+      char m[140];   // a számok felső határa a PAGE_COUNT-ból (új oldalnál se maradjon le)
+      snprintf(m, sizeof(m), "Ismeretlen oldal. Lehet: fooldal, energia, elorejelzes, kint, bent, reszletes, naplo (vagy 0..%d).", PAGE_COUNT - 1);
+      s.send(400, "text/plain; charset=utf-8", m);
       return;
     }
     if (p == PAGE_ENERGY && !en_page_enabled()) { s.send(409, "text/plain; charset=utf-8", "Az Energia ki van kapcsolva."); return; }
