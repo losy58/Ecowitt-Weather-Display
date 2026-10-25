@@ -21,7 +21,7 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   Előtte ellenőrizve: a kódban és a dokumentációban nincs személyes adat (ntfy-téma, otthoni koordináta, IP, e-mail;
   a képekben EXIF/GPS); az ntfy-témát a felhasználó lecserélte. A Claude-os nyomok (Co-Authored-By sor, `CLAUDE.md`,
   `.claude/`) maradhatnak: nem titok (a felhasználó döntése). Új személyes adat ezután se kerüljön a tárolóba.
-- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0): a felhasználóknak kész programfájlok, fordítás nélkül (README:
+- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0; 2026.10.25.: v1.4.1): a felhasználóknak kész programfájlok, fordítás nélkül (README:
   „Telepítés fordítás nélkül”). Kijelzőnként a `.pio/build/<env>/firmware.factory.bin` (első telepítés USB-n a `0x0`
   címre: betöltő – a 7B-n 0x0, a P4-en 0x2000 –, partíciótábla, program; az NVS-t üresre írja, az FFat-et nem érinti)
   és a `firmware.bin` (OTA). Nevük: `Ecowitt-Weather-Display-vX.Y.Z-7B-factory.bin`, `…-7B-ota.bin`, `…-P4-factory.bin`,
@@ -442,8 +442,11 @@ a felület a teljes 1280x800-at kihasználja.
     OTA-nál `p4_cam_pause()`. A szünet: előbb a CSI-vezérlő áll le (`esp_cam_ctlr_stop`), utána a kamera; folytatás
     fordítva. Ha csak a kamera állt le, a DMA egy félkész képen ragadt, és utána nem jött több kép. **Új mentésnél
     (NVS, FFat) a `CamPause`-t nem szabad kihagyni.** Általános horog nincs (az esp_flash a `spi_flash_guard`-ot
-    megkerüli). A flash-*olvasás* is kikapcsolja a cache-t (pl. a NVS-olvasás a kezelőoldal minden betöltésekor:
-    `wifiTxName()`); ez rövid, eddig nem okozott gondot, de elvben ugyanaz a kockázat.
+    megkerüli). **A flash-*olvasás* is kikapcsolja a cache-t, és ugyanígy összeomlást okoz** (v1.4.1, 2026.10.25.): a
+    `wifiTune()` 20 mp-enként kiolvasta az NVS-ből a `txp`-t (`txSaved()`), és ez 1-3 naponta `ipc0`, ok 25 összeomlást
+    okozott (10.21., 10.24., 10.25.; mindhárom coredumpban a `loopTask` a `txSaved()` → `nvs_get_i32` → `esp_flash_read`-ben
+    állt). Javítás: a `txp` induláskor egyszer olvasódik, utána a memóriából jön; a futás közben is hívott `cfg_load()`
+    `CamPause`-zal fut. **Futás közben ne olvass rendszeresen NVS-t / FFat-ot; ha mégis kell, `CamPause`-zal.**
   - **Buktató: a CSI-meghajtó tartalékpuffere kicsi** (v1.1.1). A meghajtó a saját tartalékpufferét (ahová akkor ír,
     ha nincs kiadott puffer) a *kimeneti* képmérethez foglalja (RAW8: 2,07 MB), a DMA-átvitel méretét viszont a
     *bemeneti* méretből számolja (RAW10: 2,59 MB). A túlírás felülírta a szomszédos PSRAM-ot: 2026.10.17. este az

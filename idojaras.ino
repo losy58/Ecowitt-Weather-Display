@@ -351,6 +351,7 @@ static double pref_dbl(Preferences &p, const char *k, double def) { return p.isK
 static float pref_flt(Preferences &p, const char *k, float def) { return p.isKey(k) ? p.getFloat(k, def) : def; }
 
 static void cfg_load() {
+  CamPause cam_pause_;   // P4: a flash-olvasás alatt is álljon a kamera (beállítás-mentés után is lefut, futó kamerával)
   Preferences p;
   p.begin("cfg", true);
   cfg.has_loc = p.isKey("lat") && p.isKey("lon");

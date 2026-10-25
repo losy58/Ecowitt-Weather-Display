@@ -59,13 +59,22 @@ static const wifi_power_t TX_POWER[] = {WIFI_POWER_11dBm, WIFI_POWER_8_5dBm, WIF
 static const char *TX_NAME[] = {"11 dBm", "8,5 dBm", "19,5 dBm"};
 static const int TX_COUNT = sizeof(TX_POWER) / sizeof(TX_POWER[0]);
 
+// A mentett fokozatot csak egyszer olvassuk ki (induláskor, a kamera indulása előtt), utána a memóriából adjuk. A P4-en a
+// flash-OLVASÁS is kikapcsolja a cache-t, és ha ekkor ér véget egy kamerakép, összeomlás (ipc0, ok 25): a wifiTune()
+// 20 mp-enkénti NVS-olvasása 1-3 naponta ezt okozta (2026.10.21., 10.24., 10.25., a coredumpok szerint).
+static int txCached = -1;
+
 static int txSaved()
 {
-    Preferences p;
-    p.begin("cfg", true);
-    int i = p.getInt("txp", 0);
-    p.end();
-    return (i >= 0 && i < TX_COUNT) ? i : 0;
+    if (txCached < 0)
+    {
+        Preferences p;
+        p.begin("cfg", true);
+        int i = p.getInt("txp", 0);
+        p.end();
+        txCached = (i >= 0 && i < TX_COUNT) ? i : 0;
+    }
+    return txCached;
 }
 
 static void txSave(int i)
@@ -79,6 +88,7 @@ static void txSave(int i)
     p.begin("cfg", false);
     p.putInt("txp", i);
     p.end();
+    txCached = i;
 #if KIJELZO_P4
     p4_cam_pause(false);
 #endif
