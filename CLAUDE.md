@@ -21,7 +21,7 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   Előtte ellenőrizve: a kódban és a dokumentációban nincs személyes adat (ntfy-téma, otthoni koordináta, IP, e-mail;
   a képekben EXIF/GPS); az ntfy-témát a felhasználó lecserélte. A Claude-os nyomok (Co-Authored-By sor, `CLAUDE.md`,
   `.claude/`) maradhatnak: nem titok (a felhasználó döntése). Új személyes adat ezután se kerüljön a tárolóba.
-- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0; 2026.10.25.: v1.4.1, v1.4.2): a felhasználóknak kész programfájlok, fordítás nélkül (README:
+- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0; 2026.10.25.: v1.4.1, v1.4.2, v1.4.3): a felhasználóknak kész programfájlok, fordítás nélkül (README:
   „Telepítés fordítás nélkül”). Kijelzőnként a `.pio/build/<env>/firmware.factory.bin` (első telepítés USB-n a `0x0`
   címre: betöltő – a 7B-n 0x0, a P4-en 0x2000 –, partíciótábla, program; az NVS-t üresre írja, az FFat-et nem érinti)
   és a `firmware.bin` (OTA). Nevük: `Ecowitt-Weather-Display-vX.Y.Z-7B-factory.bin`, `…-7B-ota.bin`, `…-P4-factory.bin`,
@@ -171,7 +171,7 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   indulás idejétől számol, ezt kiírja) → mai vétel / leadás / boyler.
 - **Napi diagram:** `/energia.bin` (FFat, `EnPvDay`, magic `ENV2`): 288 db 5 perces szelet, a termelés (W, a felhő időbélyege szerinti
   szeletbe) és a hálózati teljesítmény átlaga (a P1 mintáiból; a szelet végén mentve). Kék = a termelés saját fogyasztásra
-  használt része (termelés - leadás), lila = vétel (a kékre rakva), zöld = termelés. 0-24 óra; a skála a termelési csúcshoz igazodik
+  használt része (termelés - leadás), lila = vétel (a kékre rakva), zöld = termelés; hálózati adat nélkül (nem elérhető P1) csak zöld. 0-24 óra; a skála a termelési csúcshoz igazodik
   (0,5 / 1 / 1,5 / 2 kW, felette egész kW), a nagyobb fogyasztás a tetején levágva. Új szelet-formátumnál új magic kell.
 - **Az oldal** (`PAGE_ENERGY`, a főoldal után): csak bekapcsolt energiánál van a lapozásban (`page_step()`), NEM ugrik vissza magától a
   főoldalra, az elemei az első megnyitáskor jönnek létre (LVGL memória). A vételnél a hálózat lila, visszatáplálásnál zöld.

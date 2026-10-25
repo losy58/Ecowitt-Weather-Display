@@ -238,10 +238,11 @@ static float en_ch_net(int x) {
   const float v0 = en_pv.net[s0], v1 = en_pv.net[s1] == EN_NET_NONE ? v0 : en_pv.net[s1];
   return v0 + (v1 - v0) * (pos - s0);
 }
-// termelés (p), saját fogyasztás (self) és vétel (imp), W: a hálózati előjeles érték és a termelés alapján
+// termelés (p), saját fogyasztás (self) és vétel (imp), W: a hálózati előjeles érték és a termelés alapján. Hálózati adat
+// nélkül (pl. nem elérhető a P1) a saját fogyasztás nem tudható: csak a termelés látszik (zöld), kék és lila nélkül.
 static void en_ch_split(float pv, float net, float &p, float &self, float &imp) {
   p = isnan(pv) ? 0 : pv;
-  if (isnan(net)) { self = p; imp = 0; return; }
+  if (isnan(net)) { self = 0; imp = 0; return; }
   imp = net > 0 ? net : 0;
   const float ex = net < 0 ? -net : 0;
   self = p > ex ? p - ex : 0;
@@ -314,7 +315,7 @@ static void en_chart_update() {
       en_ch_split(pv, net, p, self, imp);
       const int hp = min((int)(p * k), EN_CH_H - 1), hs = min((int)(self * k), EN_CH_H - 1), hh = min((int)((self + imp) * k), EN_CH_H - 1);   // a tetején levágva
       for (int y = 0; y <= hp; y++) lv_canvas_set_px(en_ch_cv, x, EN_CH_H - 1 - y, c_pv, LV_OPA_COVER);
-      for (int y = 0; y <= hs; y++) lv_canvas_set_px(en_ch_cv, x, EN_CH_H - 1 - y, c_self, LV_OPA_COVER);
+      if (self > 0) for (int y = 0; y <= hs; y++) lv_canvas_set_px(en_ch_cv, x, EN_CH_H - 1 - y, c_self, LV_OPA_COVER);   // 0-nál ne maradjon kék sor
       for (int y = hs + 1; y <= hh; y++) lv_canvas_set_px(en_ch_cv, x, EN_CH_H - 1 - y, c_imp, LV_OPA_COVER);
       if (hp > 0) for (int y = hp - lw + 1; y <= hp; y++) if (y >= 0) lv_canvas_set_px(en_ch_cv, x, EN_CH_H - 1 - y, c_edge, LV_OPA_COVER);
     }
