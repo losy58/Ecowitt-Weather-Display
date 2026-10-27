@@ -1,6 +1,7 @@
-// Képernyőkép: GET /screenshot[?oldal=energia] a kezelőoldal jelszavával (ha van); 24 bites BMP az aktív LVGL képernyőről.
+// Képernyőkép: GET /screenshot[?oldal=energia][&szoba=haloszoba] a kezelőoldal jelszavával (ha van); 24 bites BMP az aktív LVGL képernyőről.
 // Az oldal= (név vagy sorszám) előbb átvált a kért oldalra, és az marad megnyitva. A kép egy saját PSRAM-pufferbe készül
 // (az LVGL memóriájából nem foglal nagyot), a főszálban, ezért a kijelző 1-2 másodpercre megáll.
+// A szoba= (a helyiség sorszáma 1..3, neve, ékezet nélkül is, vagy konzol-azonosítója) a főoldal "Bent" kártyáját állítja.
 // (Az idojaras.ino része: az Arduino IDE és a PlatformIO a fájlokat ábécésorrendben, egy programmá fűzi össze.)
 
 // az oldal neve (magyarul vagy angolul) vagy sorszáma -> PAGE_*; -1: ismeretlen
@@ -21,9 +22,59 @@ static int screenshot_page(String a) {
   return -1;
 }
 
+// összehasonlításhoz: kisbetű, ékezet nélkül, csak betű és szám ("Hálószoba" -> "haloszoba")
+static String screenshot_fold(const char *t) {
+  String o;
+  for (const uint8_t *p = (const uint8_t *)t; *p; p++) {
+    char c = 0;
+    if (*p == 0xC3 && p[1]) {
+      switch (*++p | 0x20) {   // a nagybetű 0x20-szal kisebb (Á 0x81, á 0xA1)
+        case 0xA1: c = 'a'; break;
+        case 0xA9: c = 'e'; break;
+        case 0xAD: c = 'i'; break;
+        case 0xB3: case 0xB6: c = 'o'; break;
+        case 0xBA: case 0xBC: c = 'u'; break;
+      }
+    } else if (*p == 0xC5 && p[1]) {
+      ++p;
+      if (*p == 0x90 || *p == 0x91) c = 'o';        // Ő ő
+      else if (*p == 0xB0 || *p == 0xB1) c = 'u';   // Ű ű
+    } else if (isalnum(*p)) {
+      c = tolower(*p);
+    }
+    if (c) o += c;
+  }
+  return o;
+}
+
+// a helyiség sorszáma (1..3), neve (ékezet nélkül is) vagy konzol-azonosítója -> rooms[] index; -1: nincs ilyen
+static int screenshot_room(const String &a) {
+  const String f = screenshot_fold(a.c_str());
+  if (f.length() == 1 && f[0] >= '1' && f[0] < '1' + ROOM_COUNT) {
+    const int i = f[0] - '1';
+    return rooms[i].match[0] ? i : -1;
+  }
+  if (!f.length()) return -1;
+  for (int i = 0; i < ROOM_COUNT; i++)
+    if (rooms[i].match[0] && (f == screenshot_fold(rooms[i].name) || f == screenshot_fold(rooms[i].match))) return i;
+  return -1;
+}
+
 static void handle_screenshot() {
   if (!ota_auth_ok()) { request_auth(); return; }
   WebServer &s = my_server;
+  if (s.hasArg("szoba")) {   // a főoldal "Bent" kártyájának helyisége (mint a kártyára koppintva)
+    const int r = screenshot_room(s.arg("szoba"));
+    if (r < 0) {
+      String m = "Ismeretlen helyiség. Lehet a sorszáma (1.." + String(ROOM_COUNT) + ") vagy a neve:";
+      for (int i = 0; i < ROOM_COUNT; i++) if (rooms[i].match[0]) { m += ' '; m += rooms[i].name; }
+      s.send(400, "text/plain; charset=utf-8", m);
+      return;
+    }
+    sel_room = r;
+    LogOut.printf("Képernyőkép: Bent zóna -> %s\n", rooms[sel_room].name);
+    update_dashboard();
+  }
   if (s.hasArg("oldal")) {
     const int p = screenshot_page(s.arg("oldal"));
     if (p < 0) {

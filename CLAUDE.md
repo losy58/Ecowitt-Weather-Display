@@ -183,9 +183,11 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
 
 ## Képernyőkép (v1.4.0)
 
-`GET /screenshot[?oldal=fooldal|energia|elorejelzes|kint|bent|reszletes|naplo]` (a kezelőoldal jelszavával): az aktív LVGL
+`GET /screenshot[?oldal=fooldal|energia|elorejelzes|kint|bent|reszletes|naplo][&szoba=…]` (a kezelőoldal jelszavával): az aktív LVGL
 képernyőt 24 bites BMP-ben adja (`idojaras_17g_kepernyokep.ino`, `LV_USE_SNAPSHOT 1`; a puffer PSRAM-ban, saját
 `lv_draw_buf_t`-vel, mert az LVGL szűk memóriájából nem foglalható ekkora). Az `oldal=` előbb átvált arra az oldalra, és az marad. A
+`szoba=` (v1.5.0, a felhasználó kérése) a főoldal „Bent” kártyáját állítja, mint a kártyára koppintás: a helyiség sorszáma (1..3),
+neve (ékezet nélkül is, pl. `haloszoba`) vagy konzol-azonosítója; így a kijelző távolról is átállítható. A
 főszálban fut: 4-9 mp, a kijelző addig áll. Fejlesztéshez: `curl -o k.bmp "http://<kijelző>/screenshot?oldal=energia"`, majd
 `sips -s format png k.bmp --out k.png` (Mac). Így a kinézet fotó nélkül is ellenőrizhető (7B: 1024x600, P4: 1280x800).
 

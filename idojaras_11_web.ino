@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 // Firmware-frissítés a böngészőből: http://idojaras.local/ vagy http://<a lap IP-je>/  (.bin feltöltése)
 // ---------------------------------------------------------------------------
-static const char *FW_NAME = "Ecowitt Weather Display v1.4.3" FW_BOARD;
+static const char *FW_NAME = "Ecowitt Weather Display v1.5.0" FW_BOARD;
 static const char *MDNS_NAME = MDNS_HOST;   // a név a hálózaton (kijelzo.h): idojaras.local, ill. idojaras-p4.local
 
 static lv_obj_t *ota_ov = NULL, *ota_l1 = NULL, *ota_l2 = NULL, *ota_fill = NULL;
