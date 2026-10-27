@@ -71,7 +71,8 @@ Photos of the display in demo mode (made-up data, English interface).
 - **Forwarding to other displays:** consoles usually upload to a single address; the display can forward the
   received data to another one (up to 3 hops in a chain).
 - **Screenshot:** `http://<display>/screenshot` returns the current screen as a BMP; `?oldal=energia` (or `fooldal`,
-  `elorejelzes`, `kint`, `bent`, `reszletes`, `naplo`) switches to that page first. It freezes the display for a few seconds.
+  `elorejelzes`, `kint`, `bent`, `reszletes`, `naplo`) switches to that page first; `&szoba=bedroom` (the room's name, accents
+  optional, or its number: 1..3) sets the room on the dashboard's indoor card. It freezes the display for a few seconds.
 
 **P4 only:** the board's RTC (RX8025T with coin cell) keeps time without WiFi; the Li battery voltage is shown and a
 notification is sent on power loss; a sound alert when "ventilate" appears (on/off, volume; silent during the night
@@ -166,7 +167,7 @@ Later updates can go over the air: upload `.pio/build/<environment>/firmware.bin
 | `/raw` | all fields of each console's last upload |
 | `/ecowitt` | data from the consoles (`?fwd=N`: forwarded data, forwarded at most 3 times) |
 | `/energia` | solar data forwarded from another display (POST) |
-| `/screenshot` | the current screen as a BMP (`?oldal=<page>` switches to a page first) |
+| `/screenshot` | the current screen as a BMP (`?oldal=<page>` switches to a page first, `&szoba=<room>` sets the dashboard's room) |
 | `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`, `/ntfytest`, `/clearcrash` | web page actions |
 
 Without a password anyone on the local network can reach the web page. Do not expose the display directly to the

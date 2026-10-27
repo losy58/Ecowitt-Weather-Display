@@ -72,7 +72,8 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
 - **Továbbküldés másik kijelzőkre:** a konzolok általában csak egy címre küldenek; a kijelző a kapott adatokat
   továbbküldheti egy másiknak (láncban legfeljebb 3 lépésig).
 - **Képernyőkép:** a `http://<kijelző>/screenshot` a mostani képernyőt adja BMP-ben; az `?oldal=energia` (vagy `fooldal`,
-  `elorejelzes`, `kint`, `bent`, `reszletes`, `naplo`) előbb átvált arra az oldalra. A kijelző pár másodpercre megáll.
+  `elorejelzes`, `kint`, `bent`, `reszletes`, `naplo`) előbb átvált arra az oldalra; a `&szoba=haloszoba` (a helyiség neve,
+  ékezet nélkül is, vagy sorszáma: 1..3) a főoldal „Bent” kártyáját állítja. A kijelző pár másodpercre megáll.
 
 **Csak a P4-en:** a lap saját órája (RX8025T, gombelemmel) WiFi nélkül is pontos időt ad; a Li-akku feszültsége
 látszik, és áramszünetről értesítést küld; hangjelzés, amikor megjelenik a „Szellőztess” (be/ki, hangerő; az éjszakai
@@ -168,7 +169,7 @@ Később a frissítés OTA-n is megy: a `.pio/build/<környezet>/firmware.bin` f
 | `/raw` | a konzolok utolsó küldésének összes mezője |
 | `/ecowitt` | adatfogadás a konzoloktól (`?fwd=N`: továbbküldött adat, legfeljebb 3-szor küldi tovább) |
 | `/energia` | másik kijelzőtől továbbküldött napelem-adat (POST) |
-| `/screenshot` | a mostani képernyő BMP-ben (`?oldal=<oldal>` előbb átvált arra az oldalra) |
+| `/screenshot` | a mostani képernyő BMP-ben (`?oldal=<oldal>` előbb átvált arra az oldalra, `&szoba=<helyiség>` a főoldal helyiségét állítja) |
 | `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`, `/ntfytest`, `/clearcrash` | a kezelőoldal műveletei |
 
 A kezelőoldal jelszava a beállításoknál adható meg; jelszó nélkül a helyi hálózaton bárki eléri. A kijelzőt ne tedd
