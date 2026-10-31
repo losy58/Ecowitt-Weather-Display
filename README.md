@@ -96,6 +96,16 @@ A 3D-printable desk stand for the Guition JC8012P4A1C (10.1"):
 
 <img src="docs/kepek/desk-stand.jpg" alt="The P4 display in the 3D-printed desk stand" width="600">
 
+## Wall mount
+
+A 3D-printable wall mount for the Guition JC8012P4A1C (10.1"), in two parts (top and bottom bracket):
+[Guition JC8012P4A1C 10.1" wall mount](https://makerworld.com/hu/models/3522419-guition-jc8012p4a1c-10-1-wall-mount) on MakerWorld.
+The STL files are also in this repository:
+[docs/wall-mount/wall_mount_top_bracket.stl](docs/wall-mount/wall_mount_top_bracket.stl),
+[docs/wall-mount/wall_mount_bottom_bracket.stl](docs/wall-mount/wall_mount_bottom_bracket.stl).
+
+<img src="docs/kepek/wall-mount.jpg" alt="The 3D-printed wall mount brackets on the back of the P4 display" width="600">
+
 ## Installing without building
 
 Ready-made firmware files are attached to each [release](https://github.com/losy58/Ecowitt-Weather-Display/releases/latest):

@@ -97,6 +97,16 @@ a kezelőoldalon).
 
 <img src="docs/kepek/desk-stand.jpg" alt="A P4-es kijelző a 3D-nyomtatott asztali támaszban" width="600">
 
+## Falitartó
+
+3D-nyomtatható falitartó a Guition JC8012P4A1C-hez (10,1"), két részből (felső és alsó konzol):
+[Guition JC8012P4A1C 10.1" wall mount](https://makerworld.com/hu/models/3522419-guition-jc8012p4a1c-10-1-wall-mount) a MakerWorldön.
+Az STL-fájlok ebben a tárolóban is megvannak:
+[docs/wall-mount/wall_mount_top_bracket.stl](docs/wall-mount/wall_mount_top_bracket.stl),
+[docs/wall-mount/wall_mount_bottom_bracket.stl](docs/wall-mount/wall_mount_bottom_bracket.stl).
+
+<img src="docs/kepek/wall-mount.jpg" alt="A 3D-nyomtatott falitartó konzoljai a P4-es kijelző hátán" width="600">
+
 ## Telepítés fordítás nélkül
 
 A kész programfájlok minden [kiadáshoz](https://github.com/losy58/Ecowitt-Weather-Display/releases/latest) csatolva vannak:
