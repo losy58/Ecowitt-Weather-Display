@@ -176,6 +176,32 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
 - **Az oldal** (`PAGE_ENERGY`, a főoldal után): csak bekapcsolt energiánál van a lapozásban (`page_step()`), NEM ugrik vissza magától a
   főoldalra, az elemei az első megnyitáskor jönnek létre (LVGL memória). A vételnél a hálózat lila, visszatáplálásnál zöld.
   Bemutató módban nincs lekérés és az oldal sincs a lapozásban (még nincs kitalált energia-adat).
+- **Az áramlás-kép átalakítva (v1.6.0, 2026.11.01., a felhasználó kérése):** a korábbi négy külön kör (Napelem, Hálózat, Ház,
+  Boyler) helyett egy közös kép: a Hálózat egy villanyoszlop (letisztult, X-rácsozott láb, 2 kar) + alatta egy rövidebb doboz
+  (az oszlop ezért karcsúbb), a Napelem+Ház+Boyler pedig egy házikép (nyitott tetővonal, napsugaras nap, a napelem termelése a
+  tetőben, alatta válaszvonal, a Ház szövege és a Boyler kis doboza). A Hálózat és a Ház/Boyler kerete/vonalai dinamikusan az
+  energiahelyzet színét követik (lila vétel, zöld visszatáplálás/napelem, kék mindkét forrás); a tető és a napelem-rész sárga, de
+  csak ha van napelem-adat (`gw`), különben szürke. Nincs külön Napelem→Ház és Ház→Boyler vonal (mindkettő a közös képben van,
+  "nem kell hozzá vonal/vezeték"), csak a Hálózat↔Ház vonal (irány szerint lila/zöld, megforduló pöttyökkel). A napi diagram
+  függőleges tengelye 2 kW-onként van beosztva (`EN_CH_YSTEP`), nem csak 3 ponton. Kód: `energia_02_oldal.ino`.
+- **Boyler hőfoka (Tuya, v1.6.0, 2026.11.01., a felhasználó kérése):** a bojler saját (Tuya) WiFi-modulja a helyi hálózaton, TCP
+  6668-on, Tuya 3.3 protokollal, AES-128-ECB-vel titkosítva adja a hőfokát és az állapotát. Beállítás (webes Beállítások, „Boyler
+  hőfoka” rész): a Tuya-hálózat címe (`en_bl`), eszköz-ID (`en_blid`), helyi kulcs (`en_blk`, jelszómező, a Tuya API Explorer →
+  Device Management → Query Device Details lekérésből; NEM kerülhet a kódba). Lekérés (`en_fetch_boiler`, `en_worker`, 30
+  mp-enként): DP_QUERY (cmd `0x0A`), a kérés/válasz kerete `000055AA` + sorszám(4) + parancs(4) + hossz(4) + titkosított payload +
+  CRC32(4) + `0000AA55`; a válasz fejléce után egy 4 bájtos visszatérési kód jön, utána a titkosított JSON. A kapcsolódás lassabb,
+  mint a helyi HomeWizard-eszközöké, ezért külön, hosszabb időkorlátja van (`EN_BL_CONNECT_MS`).
+  **DP-k** (kézzel kipróbálva, 2026.11.01.): `1` be/ki, `2` üzemmód (gyártói név: `jiheat` = azonnali fűtés, `eco` = Eco
+  [max. 55°C], `manmenu` = intelligens/smart, `highwarm` = Anti-bakteriális [kizárásos alapon: a bojleren pontosan ez a 4
+  kapcsolható mód van, a másik hármat egyértelműen azonosítottuk]), `9` cél-hőfok (°C; Eco módban a mód felülírja, más módban a
+  ténylegesen beállított érték), `10` jelenlegi hőfok (°C), `13` állapot (`heating` fűt, `warm` tartja, `standby` ki), `14`
+  kivehető melegvíz (%), `20` hibakód (bitmap). Az Anti-bakteriális ciklus (80°C-ra fűt, utána visszaáll az eredeti módra) alatt a
+  9-es DP-n nem láttunk 80-at (maradt a korábbi cél-hőfokon) – lehet, hogy a ciklus a DP 9-et nem írja át, a fűtést belsőleg
+  vezérli. A fizikai túlmelegedés elleni védelem a bojlerben van, nem szoftveres.
+  **Vezérlés (DP-írás, kipróbálva, még nincs a firmware-ben):** CONTROL paranccsal (cmd `0x07`) lehet írni (pl. cél-hőfok: DP 9),
+  de a titkosított payload elé — a DP_QUERY-vel ellentétben — egy 15 bájtos, NEM titkosított fejléc kell: `"3.3"` + 12 nulla bájt,
+  utána jön az AES-ECB-vel titkosított JSON (`{"devId","uid","t","dps":{...}}`, `gwId` nem kell). Enélkül a bojler
+  „parse data error”-ral (visszatérési kód 1) utasítja el.
 - **S3-as 7B: OTA után az újraindítás oka néha `RTCWDT_RTC_RST`** (a szoftveres reset nem fejeződik be, az ESP-IDF tartalék RTC
   watchdogja végzi, kb. 1 mp múlva; a kijelző ártalmatlanul elindul). A `diag_init()` ezt kért újraindításnak jegyzi, ha a program
   maga kért újraindítást (`diag_mark_restart`). A P4-en nem fordult elő; az okát nem találtuk meg (a háttérfeladat leállítása

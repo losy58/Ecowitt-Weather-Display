@@ -4,6 +4,7 @@
 // Az aktuális oldal megjelenítése; a főoldalon a felső sáv bal oldali órája rejtve van (ott a nagy óra látszik)
 static void show_page(int p) {
   if (fs_idx >= 0) fs_close();
+  if (en_fs_open) en_chart_fs_close();
   bl_panel_close();
   settings_close();
   current_page = p;

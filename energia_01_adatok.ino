@@ -18,6 +18,9 @@ constexpr uint32_t EN_GW_MS = 5UL * 60UL * 1000UL;   // Growatt
 constexpr uint32_t EN_GW_RETRY_MS = 60UL * 1000UL;   // Growatt hiba után
 constexpr uint32_t EN_GW_RATE_MS = 10UL * 60UL * 1000UL;   // Growatt "túl sűrű lekérdezés" (10012) után
 constexpr int EN_GW_ERR_RATE = 10012;                // error_frequently_access (több kijelző ugyanazzal a tokennel)
+constexpr uint32_t EN_BL_MS = 30000, EN_BL_RETRY_MS = 60000;   // boyler Tuya-hőfok: 30 mp-enként, hiba után 1 perc
+constexpr uint32_t EN_BL_STALE_MS = 90000;
+constexpr int EN_BL_CONNECT_MS = 3500;   // a Tuya-eszköz lassabban fogadja a kapcsolódást, mint a helyi HTTP-eszközök
 constexpr uint32_t EN_LOCAL_STALE_MS = 15000;        // ennél régebbi P1-/dugalj-adat már nem érvényes
 constexpr uint32_t EN_GW_STALE_MS = 20UL * 60UL * 1000UL;
 constexpr int EN_CONNECT_MS = 1500, EN_TIMEOUT_MS = 2500;      // helyi eszközök
@@ -26,7 +29,7 @@ constexpr float EN_OVERVOLT_V = 253.0f;              // túlfeszültség: 230 V 
 #define EN_GW_DEFAULT "openapi.growatt.com"          // európai szerver
 
 // beállítások (a főszál írja mentéskor, a háttérfeladat en_mux alatt másolja) és a mért adatok (EnCfg, EnData: idojaras.ino)
-static EnCfg en_cfg = {false, "", "", "", "", 0.0f, ""};
+static EnCfg en_cfg = {};
 static EnData en_data = {};
 static portMUX_TYPE en_mux = portMUX_INITIALIZER_UNLOCKED;
 static TaskHandle_t en_task_h = NULL;
@@ -38,14 +41,15 @@ struct EnDay { int32_t key, since; float imp, exp, boil; };
 static EnDay en_day = {-1, 0, NAN, NAN, NAN};
 
 // A mai nap 5 perces szeletekben (a napi diagramhoz): w = a napelem termelése (W, a Growatt-lekérésekből, a felhő időbélyege
-// szerint), net = a hálózati teljesítmény átlaga (W, + vétel, - visszatáplálás, a P1-ből). FFat "/energia.bin" (a többi
-// előzményfájltól külön), szeletenként mentve. A mai nap kulcsa (key) szerint törlődik.
+// szerint), net = a hálózati teljesítmény átlaga (W, + vétel, - visszatáplálás, a P1-ből), boil = a boyler teljesítményének
+// átlaga (W, a dugalj mintáiból). FFat "/energia.bin" (a többi előzményfájltól külön), szeletenként mentve. A mai nap
+// kulcsa (key) szerint törlődik.
 constexpr int EN_PV_N = 288;
 constexpr uint16_t EN_PV_NONE = 0xFFFF;
 constexpr int16_t EN_NET_NONE = INT16_MIN;
-constexpr uint32_t EN_PV_MAGIC = 0x32564E45;   // "ENV2" (az ENV1 csak a termelést tárolta; azt a betöltés eldobja)
+constexpr uint32_t EN_PV_MAGIC = 0x33564E45;   // "ENV3" (az ENV2 a boylert még nem tárolta; azt a betöltés eldobja)
 #define EN_PV_FILE "/energia.bin"
-struct EnPvDay { uint32_t magic; int32_t key; uint16_t w[EN_PV_N]; int16_t net[EN_PV_N]; };
+struct EnPvDay { uint32_t magic; int32_t key; uint16_t w[EN_PV_N]; int16_t net[EN_PV_N], boil[EN_PV_N]; };
 static EnPvDay en_pv = {};
 static int en_pv_last = -1;         // az utolsó rögzített termelés-szelet (a kimaradt szeletek kitöltéséhez)
 static uint32_t en_pv_ver = 1;      // változáskor nő (a diagram ebből tudja, hogy újra kell rajzolni)
@@ -55,6 +59,7 @@ static void en_pv_clear(int32_t key) {
   en_pv.key = key;
   for (uint16_t &w : en_pv.w) w = EN_PV_NONE;
   for (int16_t &n : en_pv.net) n = EN_NET_NONE;
+  for (int16_t &b : en_pv.boil) b = EN_NET_NONE;
   en_pv_last = -1;
   en_pv_ver++;
 }
@@ -103,27 +108,29 @@ static void en_pv_record(const EnData &d) {
   en_pv_save();
 }
 
-// A hálózati teljesítmény 5 perces átlaga a P1 mintáiból: a szelet végén mentve, közben 30 mp-enként az aktuális (részleges)
-// átlag kerül a diagramra (mentés nélkül).
+// A hálózati teljesítmény és a boyler teljesítményének 5 perces átlaga a mintáikból: a szelet végén mentve, közben
+// 30 mp-enként az aktuális (részleges) átlag kerül a diagramra (mentés nélkül).
 static void en_net_task(const EnData &d) {
   struct tm t;
   if (!get_local_tm(t)) return;
   const int32_t key = (t.tm_year + 1900) * 400 + t.tm_yday;
   const int s = (t.tm_hour * 60 + t.tm_min) / 5;
   static int32_t acc_key = -1;
-  static int acc_slice = -1, n = 0;
-  static double sum = 0;
-  static uint32_t last_p1 = 0, last_live = 0;
+  static int acc_slice = -1, n = 0, bn = 0;
+  static double sum = 0, bsum = 0;
+  static uint32_t last_p1 = 0, last_sk = 0, last_live = 0;
   if (key != acc_key || s != acc_slice) {   // új szelet: az előző végleges értéke (ha ugyanarra a napra esik)
-    if (n > 0 && acc_key == en_pv.key && acc_slice >= 0) {
-      en_pv.net[acc_slice] = (int16_t)constrain((int)lroundf(sum / n), -32000, 32000);
+    if ((n > 0 || bn > 0) && acc_key == en_pv.key && acc_slice >= 0) {
+      if (n > 0) en_pv.net[acc_slice] = (int16_t)constrain((int)lroundf(sum / n), -32000, 32000);
+      if (bn > 0) en_pv.boil[acc_slice] = (int16_t)constrain((int)lroundf(bsum / bn), 0, 32000);
       en_pv_ver++;
       en_pv_save();
     }
-    acc_key = key; acc_slice = s; sum = 0; n = 0;
+    acc_key = key; acc_slice = s; sum = 0; n = 0; bsum = 0; bn = 0;
   }
   if (en_fresh(d.p1_ms, EN_LOCAL_STALE_MS) && d.p1_ms != last_p1) { last_p1 = d.p1_ms; sum += d.grid_w; n++; }
-  if (n > 0 && millis() - last_live >= 30000) {
+  if (en_fresh(d.sk_ms, EN_LOCAL_STALE_MS) && d.sk_ms != last_sk) { last_sk = d.sk_ms; bsum += d.boil_w; bn++; }
+  if ((n > 0 || bn > 0) && millis() - last_live >= 30000) {
     last_live = millis();
     en_pv_day(key);
     en_pv.net[s] = (int16_t)constrain((int)lroundf(sum / n), -32000, 32000);
@@ -147,10 +154,12 @@ static EnData en_snapshot() {
 
 static bool en_fresh(uint32_t ms, uint32_t limit) { return ms && millis() - ms < limit; }
 
-// A ház becsült fogyasztása (W); NAN, ha a hálózat vagy a napelem adata hiányzik
+// A ház saját (a boyler nélküli) becsült fogyasztása (W): napelem + hálózat, mínusz a boyler (azt külön mutatjuk);
+// NAN, ha a hálózat vagy a napelem adata hiányzik. A boylert csak akkor vonjuk le, ha annak adata is friss.
 static float en_house_w(const EnData &d) {
   if (!en_fresh(d.p1_ms, EN_LOCAL_STALE_MS) || !en_fresh(d.gw_ms, EN_GW_STALE_MS)) return NAN;
   float w = d.pv_w + d.grid_w;
+  if (en_fresh(d.sk_ms, EN_LOCAL_STALE_MS)) w -= d.boil_w;
   return w < 0 ? 0 : w;
 }
 
@@ -276,6 +285,130 @@ static bool en_fetch_p1(const char *host) {
     d.p1_ms = millis();
   }
   strlcpy(en_data.p1_err, err, sizeof(en_data.p1_err));
+  portEXIT_CRITICAL(&en_mux);
+  return ok;
+}
+
+// ---- Boyler: Tuya helyi protokoll (3.3), titkosítva ----
+// A konzol a WiFi-modul (Tuya) saját, helyi TCP-portján (6668) válaszol, AES-128-ECB-vel titkosítva a helyi kulccsal
+// (local_key, a Tuya fiókból, NVS-ben, nem a kódban). Keret: 0x000055AA + seq(4) + cmd(4) + hossz(4) + titkosított
+// payload + CRC32(4, a fejléc+payload fölött) + 0x0000AA55. A payload JSON {"gwId","devId","uid","t","dps":{}},
+// PKCS7-gyel 16 bájtra igazítva. A válasz fejléce után egy 4 bájtos visszatérési kód jön (0: siker), utána a
+// titkosított JSON. DP 10: temp_current (°C), DP 13: work_state (standby/heating/warm).
+constexpr int EN_BL_PORT = 6668;
+constexpr uint32_t EN_BL_CMD_QUERY = 0x0A;
+
+static uint32_t en_crc32(const uint8_t *data, size_t len) {
+  uint32_t crc = 0xFFFFFFFF;
+  for (size_t i = 0; i < len; i++) {
+    crc ^= data[i];
+    for (int b = 0; b < 8; b++) crc = (crc >> 1) ^ (0xEDB88320 & (-(int32_t)(crc & 1)));
+  }
+  return ~crc;
+}
+
+// AES-128-ECB, PKCS7-igazítással; enc: titkosítás (in_len-ből a kipufferelt, 16-ra kerekített méretet adja vissza),
+// dec: visszafejtés (a padding levágva); 0: hiba (kicsi a puffer)
+static int en_aes_ecb(bool enc, const uint8_t *key, const uint8_t *in, size_t in_len, uint8_t *out, size_t out_cap) {
+  mbedtls_aes_context ctx;
+  mbedtls_aes_init(&ctx);
+  int ret = 0;
+  if (enc) {
+    const size_t pad_len = ((in_len / 16) + 1) * 16;
+    if (pad_len > out_cap) { mbedtls_aes_free(&ctx); return 0; }
+    memcpy(out, in, in_len);
+    const uint8_t pad = (uint8_t)(pad_len - in_len);
+    for (size_t i = in_len; i < pad_len; i++) out[i] = pad;
+    mbedtls_aes_setkey_enc(&ctx, key, 128);
+    for (size_t i = 0; i < pad_len; i += 16) mbedtls_aes_crypt_ecb(&ctx, MBEDTLS_AES_ENCRYPT, out + i, out + i);
+    ret = (int)pad_len;
+  } else {
+    if (in_len % 16 != 0 || in_len == 0 || in_len > out_cap) { mbedtls_aes_free(&ctx); return 0; }
+    mbedtls_aes_setkey_dec(&ctx, key, 128);
+    for (size_t i = 0; i < in_len; i += 16) mbedtls_aes_crypt_ecb(&ctx, MBEDTLS_AES_DECRYPT, in + i, out + i);
+    const uint8_t pad = out[in_len - 1];
+    ret = (pad > 0 && pad <= 16 && (size_t)pad <= in_len) ? (int)(in_len - pad) : (int)in_len;
+  }
+  mbedtls_aes_free(&ctx);
+  return ret;
+}
+
+// A boyler Tuya-lekérése: kapcsolódás a 6668-as porton, DP_QUERY, a válaszból a hőfok és az állapot
+static bool en_fetch_boiler(const EnCfg &c) {
+  char err[48] = "";
+  bool ok = false;
+  float temp = NAN, water_pct = NAN;
+  char state[16] = "", mode[16] = "";
+  WiFiClient cli;
+  cli.setTimeout(EN_TIMEOUT_MS);
+  if (!cli.connect(c.bl, EN_BL_PORT, EN_BL_CONNECT_MS)) {
+    strlcpy(err, tr("nem elérhető", "unreachable"), sizeof(err));
+  } else {
+    char js[128];
+    snprintf(js, sizeof(js), "{\"gwId\":\"%s\",\"devId\":\"%s\",\"uid\":\"\",\"t\":\"%lu\",\"dps\":{}}", c.bl_id, c.bl_id, (unsigned long)time(NULL));
+    uint8_t enc[160];
+    const int enc_len = en_aes_ecb(true, (const uint8_t *)c.bl_key, (const uint8_t *)js, strlen(js), enc, sizeof(enc));
+    if (enc_len <= 0) {
+      strlcpy(err, tr("belső hiba", "internal error"), sizeof(err));
+    } else {
+      uint8_t pkt[16 + 160 + 8];
+      const uint32_t length = enc_len + 8;
+      pkt[0] = 0x00; pkt[1] = 0x00; pkt[2] = 0x55; pkt[3] = 0xAA;
+      memset(pkt + 4, 0, 4);   // seq
+      pkt[8] = pkt[9] = pkt[10] = 0; pkt[11] = EN_BL_CMD_QUERY;
+      pkt[12] = (uint8_t)(length >> 24); pkt[13] = (uint8_t)(length >> 16); pkt[14] = (uint8_t)(length >> 8); pkt[15] = (uint8_t)length;
+      memcpy(pkt + 16, enc, enc_len);
+      const uint32_t crc = en_crc32(pkt, 16 + enc_len);
+      uint8_t *s = pkt + 16 + enc_len;
+      s[0] = (uint8_t)(crc >> 24); s[1] = (uint8_t)(crc >> 16); s[2] = (uint8_t)(crc >> 8); s[3] = (uint8_t)crc;
+      s[4] = 0x00; s[5] = 0x00; s[6] = 0xAA; s[7] = 0x55;
+      const size_t pkt_len = 16 + enc_len + 8;
+      cli.write(pkt, pkt_len);
+      cli.flush();
+      uint8_t resp[256];
+      size_t got = 0;
+      const uint32_t t0 = millis();
+      while (got < sizeof(resp) && millis() - t0 < (uint32_t)EN_TIMEOUT_MS) {
+        if (cli.available()) { const int n = cli.read(resp + got, sizeof(resp) - got); if (n > 0) got += n; }
+        else if (got >= 16) break;
+        else delay(5);
+      }
+      if (got < 16 + 8 + 4 || resp[0] != 0x00 || resp[1] != 0x00 || resp[2] != 0x55 || resp[3] != 0xAA) {
+        strlcpy(err, tr("hibás válasz", "invalid response"), sizeof(err));
+      } else {
+        const uint32_t rlen = ((uint32_t)resp[12] << 24) | ((uint32_t)resp[13] << 16) | ((uint32_t)resp[14] << 8) | resp[15];
+        if (16 + rlen > got || rlen < 12) {
+          strlcpy(err, tr("csonka válasz", "truncated response"), sizeof(err));
+        } else {
+          const uint8_t *body = resp + 16;   // 4 bájt visszatérési kód + titkosított JSON
+          const size_t enc2_len = rlen - 8 - 4;
+          uint8_t dec[256];
+          const int dec_len = en_aes_ecb(false, (const uint8_t *)c.bl_key, body + 4, enc2_len, dec, sizeof(dec) - 1);
+          if (dec_len <= 0) {
+            strlcpy(err, tr("visszafejtési hiba (rossz kulcs?)", "decryption error (wrong key?)"), sizeof(err));
+          } else {
+            dec[dec_len] = 0;
+            temp = en_json_f((const char *)dec, "10");
+            en_json_str((const char *)dec, "13", state, sizeof(state));
+            en_json_str((const char *)dec, "2", mode, sizeof(mode));
+            water_pct = en_json_f((const char *)dec, "14");
+            ok = !isnan(temp);
+            if (!ok) strlcpy(err, tr("hiányzó adat", "missing data"), sizeof(err));
+          }
+        }
+      }
+    }
+    cli.stop();
+  }
+  portENTER_CRITICAL(&en_mux);
+  if (ok) {
+    en_data.boil_temp = temp;
+    en_data.boil_water_pct = water_pct;
+    strlcpy(en_data.boil_state, state, sizeof(en_data.boil_state));
+    strlcpy(en_data.boil_mode, mode, sizeof(en_data.boil_mode));
+    en_data.bl_ms = millis();
+  }
+  strlcpy(en_data.bl_err, err, sizeof(en_data.bl_err));
   portEXIT_CRITICAL(&en_mux);
   return ok;
 }
@@ -417,7 +550,7 @@ static void handle_energia_post() {
 
 // A háttérfeladat: egyszer indul (verem a PSRAM-ban), és amíg be van kapcsolva, a saját ütemében kérdez
 static void en_worker(void *) {
-  uint32_t next_local = 0;
+  uint32_t next_local = 0, next_bl = 0;
   uint32_t next_gw = millis() + esp_random() % 30000;   // induláskor szétszórva (több kijelző ugyanazzal a tokennel)
   for (;;) {
     EnCfg c;
@@ -434,6 +567,11 @@ static void en_worker(void *) {
       if (c.p1[0]) any |= en_fetch_p1(c.p1);
       if (c.sk[0]) any |= en_fetch_socket(c.sk);
       next_local = t0 + ((any || (!c.p1[0] && !c.sk[0])) ? EN_LOCAL_MS : EN_LOCAL_ERR_MS);
+    }
+    if (c.bl[0] && c.bl_id[0] && c.bl_key[0] && (int32_t)(millis() - next_bl) >= 0) {
+      const uint32_t t0 = millis();
+      const bool ok = en_fetch_boiler(c);
+      next_bl = t0 + (ok ? EN_BL_MS : EN_BL_RETRY_MS);
     }
     if (c.gt[0] && (force || (int32_t)(millis() - next_gw) >= 0)) {
       const bool ok = en_fetch_growatt(c);
@@ -457,6 +595,9 @@ static void en_cfg_load() {
   strlcpy(c.gs, pref_str(p, "en_gs", "").c_str(), sizeof(c.gs));
   c.kwp = pref_flt(p, "en_kwp", 0.0f);
   strlcpy(c.fw, pref_str(p, "en_fw", "").c_str(), sizeof(c.fw));
+  strlcpy(c.bl, pref_str(p, "en_bl", "").c_str(), sizeof(c.bl));
+  strlcpy(c.bl_id, pref_str(p, "en_blid", "").c_str(), sizeof(c.bl_id));
+  strlcpy(c.bl_key, pref_str(p, "en_blk", "").c_str(), sizeof(c.bl_key));
   EnDay day;
   if (p.isKey("en_day") && p.getBytesLength("en_day") == sizeof(day) && p.getBytes("en_day", &day, sizeof(day)) == sizeof(day)) en_day = day;
   p.end();
@@ -572,6 +713,17 @@ static String en_text() {
     if (!isnan(tb)) { snprintf(b, sizeof(b), tr(", ma %.2f kWh", ", today %.2f kWh"), tb); h += b; }
   } else h += tr("még nincs adat", "no data yet");
   if (en_cfg.sk[0] && d.sk_err[0]) { h += " <span style='color:#ff8a80'>"; h += html_attr(d.sk_err); h += "</span>"; }
+  if (en_cfg.bl[0]) {
+    h += tr("<br>Boyler hőfoka: ", "<br>Water heater temperature: ");
+    if (d.bl_ms) {
+      en_age(d.bl_ms, age, sizeof(age));
+      snprintf(b, sizeof(b), tr("%.0f °C, %s (%s)", "%.0f °C, %s (%s ago)"), d.boil_temp, d.boil_state[0] ? d.boil_state : "?", age);
+      h += b;
+      if (!isnan(d.boil_water_pct)) { snprintf(b, sizeof(b), tr(", kivehető melegvíz: %.0f %%", ", hot water available: %.0f%%"), d.boil_water_pct); h += b; }
+      if (d.boil_mode[0]) { snprintf(b, sizeof(b), tr(", üzemmód: %s", ", mode: %s"), d.boil_mode); h += b; }
+    } else h += tr("még nincs adat", "no data yet");
+    if (d.bl_err[0]) { h += " <span style='color:#ff8a80'>"; h += html_attr(d.bl_err); h += "</span>"; }
+  }
   // napelem
   h += tr("<br>Napelem: ", "<br>Solar: ");
   if (!d.gw_ms && !en_cfg.gt[0]) h += tr("nincs token (és másik kijelzőtől sem kaptunk adatot)", "no token (and nothing received from another display)");
@@ -600,7 +752,7 @@ static String en_text() {
   // ház
   const float house = en_house_w(d);
   if (!isnan(house)) {
-    snprintf(b, sizeof(b), tr("<br>Ház: kb. %.0f W (napelem + hálózat)", "<br>House: approx. %.0f W (solar + grid)"), house);
+    snprintf(b, sizeof(b), tr("<br>Ház: kb. %.0f W (napelem + hálózat - boyler)", "<br>House: approx. %.0f W (solar + grid - water heater)"), house);
     h += b;
   }
   return h;
@@ -647,6 +799,22 @@ static String en_settings_html() {
           "'><p style='color:#aaa;margin:0'>Growatt rejects frequent requests, so enter the token on one display only: the "
           "displays listed here get the solar data from it (e.g. idojaras-p4.local, 192.168.1.50). Energy must be on there; "
           "leave their token empty.</p>");
+  h += tr("<h3>Boyler hőfoka (Tuya)</h3><p style='color:#aaa;margin:0'>A boyler saját (Tuya) WiFi-hálózata helyben, titkosítva adja "
+          "a víz hőfokát és az állapotát. Üresen hagyott cím: nincs lekérdezve.</p><label>Boyler Tuya-hálózatának címe (IP)</label>",
+          "<h3>Water heater temperature (Tuya)</h3><p style='color:#aaa;margin:0'>The water heater's own (Tuya) WiFi network gives "
+          "its water temperature and state locally, encrypted. Left empty: not queried.</p><label>Water heater Tuya network address (IP)</label>");
+  h += "<input name='en_bl' maxlength='64' pattern='[A-Za-z0-9.:-]*' value='"; h += html_attr(en_cfg.bl);
+  h += tr("'><label>Eszköz-ID (devId)</label>", "'><label>Device ID (devId)</label>");
+  h += "<input name='en_blid' maxlength='31' pattern='[A-Za-z0-9]*' value='"; h += html_attr(en_cfg.bl_id);
+  h += tr("'><label>Helyi kulcs (local_key; üresen hagyva a mentett marad)</label>", "'><label>Local key (left empty, the saved one stays)</label>");
+  h += "<input type='password' name='en_blk' maxlength='19' autocomplete='off' placeholder='";
+  if (en_cfg.bl_key[0]) {
+    const size_t n = strlen(en_cfg.bl_key);
+    h += tr("mentve, vége: ", "saved, ends with: ");
+    h += html_attr(en_cfg.bl_key + (n > 4 ? n - 4 : 0));
+  } else h += tr("nincs megadva", "not set");
+  h += "'><label style='display:block'><input type='checkbox' name='en_blkdel' style='width:auto;margin:0 8px 0 0'>";
+  h += tr("Mentett kulcs törlése</label>", "Delete the saved key</label>");
   return h;
 }
 
@@ -701,6 +869,22 @@ static void en_settings_save(WebServer &s) {
     for (size_t i = 0; i < t.length(); i++) if (!isalnum((unsigned char)t[i]) && t[i] != '-' && t[i] != '_') ok = false;
     if (ok) strlcpy(c.gt, t.c_str(), sizeof(c.gt));
   }
+  en_host_arg(s, "en_bl", c.bl, sizeof(c.bl));
+  if (s.hasArg("en_blid")) {
+    String bi = s.arg("en_blid");
+    bi.trim();
+    bool ok = true;
+    for (size_t i = 0; i < bi.length(); i++) if (!isalnum((unsigned char)bi[i])) ok = false;
+    if (ok && bi.length() < sizeof(c.bl_id)) strlcpy(c.bl_id, bi.c_str(), sizeof(c.bl_id));
+  }
+  String bk = s.arg("en_blk");
+  bk.trim();
+  if (s.hasArg("en_blkdel")) c.bl_key[0] = 0;
+  else if (!bk.isEmpty() && bk.length() < sizeof(c.bl_key)) {
+    bool ok = true;
+    for (size_t i = 0; i < bk.length(); i++) if ((unsigned char)bk[i] < 0x20 || (unsigned char)bk[i] > 0x7E) ok = false;
+    if (ok) strlcpy(c.bl_key, bk.c_str(), sizeof(c.bl_key));
+  }
   {
     CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
     Preferences p;
@@ -712,6 +896,9 @@ static void en_settings_save(WebServer &s) {
     p.putString("en_gs", c.gs);
     p.putFloat("en_kwp", c.kwp);
     p.putString("en_fw", c.fw);
+    p.putString("en_bl", c.bl);
+    p.putString("en_blid", c.bl_id);
+    p.putString("en_blk", c.bl_key);
     p.end();
   }
   const bool gw_changed = strcmp(c.gt, en_cfg.gt) != 0 || strcmp(c.gs, en_cfg.gs) != 0 || (c.on && !en_cfg.on);
@@ -722,6 +909,7 @@ static void en_settings_save(WebServer &s) {
   if (!c.gt[0]) en_data.gw_err[0] = 0;
   if (!c.p1[0]) { en_data.p1_ms = 0; en_data.p1_err[0] = 0; }
   if (!c.sk[0]) { en_data.sk_ms = 0; en_data.sk_err[0] = 0; }
+  if (!c.bl[0] || !c.bl_id[0] || !c.bl_key[0]) { en_data.bl_ms = 0; en_data.bl_err[0] = 0; }
   portEXIT_CRITICAL(&en_mux);
   logout_printf("Energia: beállítások mentve (%s)\n", c.on ? "be" : "ki");
 }

@@ -24,6 +24,7 @@
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <mbedtls/aes.h>   // a boyler Tuya-hálózatának titkosításához (energia_01)
 #include <freertos/idf_additions.h>
 #include <esp_core_dump.h>
 #include <esp_flash.h>
@@ -308,17 +309,21 @@ struct DemoVals { float to, rh, p, w, g, dir, sol, rate, ti[3], hi[3], co2[3]; }
 // Energia (energia_01): beállítások (be/ki, a P1 mérő és a dugalj címe, Growatt-token és -szerver, a napelemek
 // teljesítménye kWp-ben, 0: a napi diagram magától skáláz) és a mért adatok;
 // *_ms: az utolsó sikeres lekérés ideje (millis), 0: még nem volt; grid_w: + vétel, - visszatáplálás
-struct EnCfg { bool on; char p1[65], sk[65], gt[65], gs[65]; float kwp; char fw[130]; };   // fw: ide küldi tovább a napelem-adatot (címek vesszővel)
+struct EnCfg {
+  bool on; char p1[65], sk[65], gt[65], gs[65]; float kwp; char fw[130];
+  char bl[65], bl_id[32], bl_key[20];   // boyler: Tuya-hálózat (helyi, titkosított), a hőfokhoz és az állapothoz
+};   // fw: ide küldi tovább a napelem-adatot (címek vesszővel)
 struct EnData {
   uint32_t p1_ms; float grid_w, u[3], i[3], imp_kwh, exp_kwh; int tariff;
   uint32_t sk_ms; float boil_w, boil_kwh;
   uint32_t gw_ms; float pv_w, pv_day, pv_month, pv_year; char gw_upd[24]; long plant_id; bool gw_remote;   // gw_remote: másik kijelzőtől kaptuk
-  char p1_err[48], sk_err[48], gw_err[80];   // az utolsó lekérés hibája (üres: sikeres)
+  uint32_t bl_ms; float boil_temp, boil_water_pct; char boil_state[16], boil_mode[16];   // boyler: Tuya-hőfok (°C), kivehető melegvíz (%), állapot, üzemmód (gyártói név, pl. "jiheat")
+  char p1_err[48], sk_err[48], gw_err[80], bl_err[48];   // az utolsó lekérés hibája (üres: sikeres)
 };
 // az energia oldal (energia_02) egy köre és egy áramlása (vonal, rajta mozgó pöttyök, érték)
 constexpr int EN_DOTS = 2;   // pötty vonalanként (fél periódussal eltolva)
 struct EnNode { lv_obj_t *ring, *title, *val, *sub; };
-struct EnFlow { lv_point_precise_t pts[2]; lv_obj_t *line, *dot[EN_DOTS], *val; bool active; };
+struct EnFlow { lv_point_precise_t pts[2]; lv_obj_t *line, *dot[EN_DOTS], *val; bool active, rev; };   // rev: a pöttyök pts[1]->pts[0] irányba mennek (pl. visszatáplálás)
 #define TR2(arr) (arr[g_lang])   // kétnyelvű tömb: arr[0] magyar, arr[1] angol
 
 // P4: amíg él, a kamera képfolyama áll (p4_cam_pause): minden flash-írás (Preferences-mentés, előzmény, OTA) köré kell.

@@ -161,8 +161,8 @@ static void touch_task() {
     return;
   }
   // a fogaskerékre (jobb felső sarok, minden oldalon) koppintva a Beállítások képernyő nyílik
-  // (nem, ha a teljes képernyős grafikon vagy a fényerő panel van nyitva: ott a sarokban más van)
-  if (g == GESTURE_TAP && fs_idx < 0 && !bl_panel_open() && last_gx >= LCD_H_RES - SX(90) && last_gy < SY(56)) {
+  // (nem, ha a teljes képernyős grafikon (időjárás vagy energia) vagy a fényerő panel van nyitva: ott a sarokban más van)
+  if (g == GESTURE_TAP && fs_idx < 0 && !en_fs_open && !bl_panel_open() && last_gx >= LCD_H_RES - SX(90) && last_gy < SY(56)) {
     settings_open();
     return;
   }
@@ -174,6 +174,15 @@ static void touch_task() {
   // teljes képernyős grafikon: csak a jobb felső sarokban lévő X zárja be, a többi érintés nem csinál semmit
   if (fs_idx >= 0) {
     if (g == GESTURE_TAP && last_gx >= LCD_H_RES - FS_CLOSE_ZONE && last_gy <= FS_CLOSE_ZONE) fs_close();
+    return;
+  }
+  // ugyanez az Energia oldal napi diagramjára (energia_02)
+  if (en_fs_open) {
+    if (g == GESTURE_TAP && en_chart_fs_close_hit(last_gx, last_gy)) en_chart_fs_close();
+    return;
+  }
+  if (g == GESTURE_TAP && current_page == PAGE_ENERGY && en_chart_hit(last_gx, last_gy)) {
+    en_chart_fs_open();
     return;
   }
   // az előzményoldalon egy grafikonra koppintva az teljes képernyőn nyílik meg
