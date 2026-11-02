@@ -25,6 +25,10 @@ constexpr uint32_t EN_BL_AFTER_CMD_MS = 1500;          // írás után ennyivel 
 // bl_on_w, EN_BA_ON_MS óta; kikapcsol, ha EN_BA_HYST_W-tal kevesebb, EN_BA_OFF_MS óta (hiszterézis: a felhők ne kapcsolgassák)
 constexpr int EN_BA_DEF_W = 2000, EN_BA_HYST_W = 500, EN_BA_MIN_W = 250, EN_BA_MAX_W = 8000;
 constexpr uint32_t EN_BA_ON_MS = 2UL * 60UL * 1000UL, EN_BA_OFF_MS = 5UL * 60UL * 1000UL, EN_BA_RETRY_MS = 60000;
+// Bojler-vezérlő (főnök): egyetlen kijelző futtatja az automatikát (bl_boss üres); a többin (távirányító, bl_boss = a vezérlő címe)
+// a Bojler fül parancsai a vezérlő /bojler címére mennek, és onnan kérdezik le 10 mp-enként az automatika állapotát. Ha a vezérlő
+// nem elérhető, a Be/Ki, az üzemmód és a cél-hőfok közvetlenül a bojlerhez megy; az automatika ilyenkor nem állítható.
+constexpr uint32_t EN_RB_MS = 10000, EN_RB_STALE_MS = 35000;
 constexpr int EN_BL_CONNECT_MS = 3500;   // a Tuya-eszköz lassabban fogadja a kapcsolódást, mint a helyi HTTP-eszközök
 constexpr uint32_t EN_LOCAL_STALE_MS = 15000;        // ennél régebbi P1-/dugalj-adat már nem érvényes
 constexpr uint32_t EN_GW_STALE_MS = 20UL * 60UL * 1000UL;
@@ -482,6 +486,73 @@ static void en_boiler_control(const EnCfg &c, const char *dps) {
   portEXIT_CRITICAL(&en_mux);
 }
 
+// "kulcs=érték" a vezérlő válaszából (pl. "auto=1&on_w=2000"); false: nincs benne
+static bool en_form_int(const char *b, const char *key, int &out) {
+  const size_t n = strlen(key);
+  for (const char *p = b; (p = strstr(p, key)) != NULL; p += n)
+    if ((p == b || p[-1] == '&') && p[n] == '=') { out = atoi(p + n + 1); return true; }
+  return false;
+}
+
+// HTTP-kérés a vezérlő kijelző /bojler címére (body == NULL: GET, különben POST); a válasz szövege a resp-be
+static bool en_boss_http(const EnCfg &c, const char *body, char *resp, size_t resp_n, char *err, size_t err_n) {
+  char url[96];
+  snprintf(url, sizeof(url), "http://%s/bojler", c.bl_boss);
+  WiFiClient cli;
+  HTTPClient http;
+  http.setConnectTimeout(EN_CONNECT_MS);
+  http.setTimeout(EN_TIMEOUT_MS);
+  http.setReuse(false);
+  resp[0] = 0;
+  if (!http.begin(cli, url)) { strlcpy(err, tr("hibás cím", "invalid address"), err_n); return false; }
+  int code;
+  if (body) {
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    code = http.POST((uint8_t *)body, strlen(body));
+  } else code = http.GET();
+  if (code == 200) strlcpy(resp, http.getString().c_str(), resp_n);
+  else en_http_err(code, err, err_n);
+  http.end();
+  return code == 200;
+}
+
+// a vezérlő automatikájának lekérése (távirányító kijelzőn, a háttérfeladatban)
+static bool en_boss_get(const EnCfg &c) {
+  char resp[96], err[48] = "";
+  int au = 0, w = 0;
+  bool ok = en_boss_http(c, NULL, resp, sizeof(resp), err, sizeof(err));
+  if (ok && !(en_form_int(resp, "auto", au) && en_form_int(resp, "on_w", w))) { ok = false; strlcpy(err, tr("hibás válasz", "invalid response"), sizeof(err)); }
+  portENTER_CRITICAL(&en_mux);
+  if (ok) { en_data.rb_auto = au != 0; en_data.rb_on_w = w; en_data.rb_ms = millis(); }
+  strlcpy(en_data.rb_err, err, sizeof(en_data.rb_err));
+  portEXIT_CRITICAL(&en_mux);
+  return ok;
+}
+
+// egy parancs a vezérlőnek: "@auto=1&on_w=2000" (az automatika) vagy DP-írás ("\"1\":true" -> cmd=...); a DP-írás, ha a
+// vezérlő nem elérhető, közvetlenül a bojlerhez megy
+static void en_boss_cmd(const EnCfg &c, const char *cmd) {
+  char body[3 * EN_BL_CMD_LEN + 8], resp[96], err[48] = "";
+  if (cmd[0] == '@') strlcpy(body, cmd + 1, sizeof(body));
+  else {
+    int n = snprintf(body, sizeof(body), "cmd=");
+    for (const char *q = cmd; *q && n < (int)sizeof(body) - 4; q++) {
+      if (isalnum((unsigned char)*q)) body[n++] = *q;
+      else n += snprintf(body + n, sizeof(body) - n, "%%%02X", (unsigned char)*q);
+    }
+    body[n] = 0;
+  }
+  const bool ok = en_boss_http(c, body, resp, sizeof(resp), err, sizeof(err));
+  if (!ok && cmd[0] != '@' && c.bl[0] && c.bl_id[0] && c.bl_key[0]) { en_boiler_control(c, cmd); return; }   // tartalék: közvetlenül
+  int au, w;
+  portENTER_CRITICAL(&en_mux);
+  if (ok && en_form_int(resp, "auto", au) && en_form_int(resp, "on_w", w)) { en_data.rb_auto = au != 0; en_data.rb_on_w = w; en_data.rb_ms = millis(); }
+  if (!ok) strlcpy(en_data.rb_err, err, sizeof(en_data.rb_err));
+  snprintf(en_bl_res, sizeof(en_bl_res), "%s -> %s: %s", cmd, c.bl_boss, ok ? "OK" : err);
+  en_bl_res_n++;
+  portEXIT_CRITICAL(&en_mux);
+}
+
 static bool en_fetch_socket(const char *host) {
   String b;
   char err[48] = "";
@@ -619,7 +690,7 @@ static void handle_energia_post() {
 
 // A háttérfeladat: egyszer indul (verem a PSRAM-ban), és amíg be van kapcsolva, a saját ütemében kérdez
 static void en_worker(void *) {
-  uint32_t next_local = 0, next_bl = 0;
+  uint32_t next_local = 0, next_bl = 0, next_rb = 0;
   uint32_t next_gw = millis() + esp_random() % 30000;   // induláskor szétszórva (több kijelző ugyanazzal a tokennel)
   for (;;) {
     EnCfg c;
@@ -637,7 +708,8 @@ static void en_worker(void *) {
       if (c.sk[0]) any |= en_fetch_socket(c.sk);
       next_local = t0 + ((any || (!c.p1[0] && !c.sk[0])) ? EN_LOCAL_MS : EN_LOCAL_ERR_MS);
     }
-    if (c.bl[0] && c.bl_id[0] && c.bl_key[0]) {
+    const bool bl_ok = c.bl[0] && c.bl_id[0] && c.bl_key[0];
+    if (bl_ok || c.bl_boss[0]) {
       char cmd[EN_BL_CMD_LEN];
       bool have = false;
       portENTER_CRITICAL(&en_mux);
@@ -649,9 +721,13 @@ static void en_worker(void *) {
       }
       portEXIT_CRITICAL(&en_mux);
       if (have) {
-        en_boiler_control(c, cmd);
+        if (c.bl_boss[0]) en_boss_cmd(c, cmd);   // távirányító: a vezérlőn keresztül
+        else if (cmd[0] != '@') en_boiler_control(c, cmd);
         next_bl = millis() + EN_BL_AFTER_CMD_MS;   // utána hamar lekérdezzük (megerősítés)
-      } else if ((int32_t)(millis() - next_bl) >= 0) {
+      } else if (c.bl_boss[0] && (int32_t)(millis() - next_rb) >= 0) {
+        en_boss_get(c);
+        next_rb = millis() + EN_RB_MS;
+      } else if (bl_ok && (int32_t)(millis() - next_bl) >= 0) {
         const uint32_t t0 = millis();
         const bool ok = en_fetch_boiler(c);
         next_bl = t0 + (ok ? EN_BL_MS : EN_BL_RETRY_MS);
@@ -684,6 +760,7 @@ static void en_cfg_load() {
   strlcpy(c.bl_key, pref_str(p, "en_blk", "").c_str(), sizeof(c.bl_key));
   c.bl_auto = p.isKey("en_ba") && p.getBool("en_ba", false);
   c.bl_on_w = p.isKey("en_bth") ? constrain(p.getInt("en_bth", EN_BA_DEF_W), EN_BA_MIN_W, EN_BA_MAX_W) : EN_BA_DEF_W;
+  strlcpy(c.bl_boss, pref_str(p, "en_bbo", "").c_str(), sizeof(c.bl_boss));
   EnDay day;
   if (p.isKey("en_day") && p.getBytesLength("en_day") == sizeof(day) && p.getBytes("en_day", &day, sizeof(day)) == sizeof(day)) en_day = day;
   p.end();
@@ -734,6 +811,57 @@ static void en_bl_auto_save() {
   p.end();
 }
 
+// Az automatika hatályos állapota a kijelzőn: a vezérlőn a sajátja, a távirányítón a vezérlőtől kapott (-1: nem tudjuk,
+// a vezérlő nem elérhető)
+static bool en_bl_remote() { return en_cfg.bl_boss[0] != 0; }
+static int en_bl_eff_auto(const EnData &d) {
+  if (!en_bl_remote()) return en_cfg.bl_auto;
+  return en_fresh(d.rb_ms, EN_RB_STALE_MS) ? d.rb_auto : -1;
+}
+static int en_bl_eff_on_w(const EnData &d) { return en_bl_remote() ? d.rb_on_w : en_cfg.bl_on_w; }
+
+// Az automatika váltása a kijelző Bojler füléről: a vezérlőn helyben (true: menteni kell), a távirányítón parancs a vezérlőnek
+static bool en_bl_auto_change(bool on, int w) {
+  w = constrain(w, EN_BA_MIN_W, EN_BA_MAX_W);
+  if (!en_bl_remote()) { en_bl_auto_set(on, w); return true; }
+  char cmd[EN_BL_CMD_LEN];
+  snprintf(cmd, sizeof(cmd), "@auto=%d&on_w=%d", on ? 1 : 0, w);
+  en_boiler_cmd(cmd);
+  portENTER_CRITICAL(&en_mux);
+  en_data.rb_auto = on; en_data.rb_on_w = w;   // azonnal látsszon (a válasz megerősíti)
+  portEXIT_CRITICAL(&en_mux);
+  return false;
+}
+
+// A vezérlő kijelző végpontja: GET /bojler -> "auto=1&on_w=2000"; POST /bojler cmd=<DP-írás> és/vagy auto=0|1, on_w=<W>
+// (a távirányító kijelzőktől). Csak a vezérlőn (bl_boss üres) fogad parancsot.
+static void handle_bojler() {
+  WebServer &s = my_server;
+  if (!en_cfg.on || g_demo) { s.send(409, "text/plain; charset=utf-8", "Az Energia ki van kapcsolva."); return; }
+  if (s.method() == HTTP_POST) {
+    if (en_cfg.bl_boss[0]) { s.send(409, "text/plain; charset=utf-8", "Nem ez a bojler vezérlője."); return; }
+    const String from = s.client().remoteIP().toString();
+    if (s.hasArg("cmd")) {
+      const String c = s.arg("cmd");
+      bool ok = c.length() > 0 && c.length() < EN_BL_CMD_LEN;
+      for (size_t i = 0; ok && i < c.length(); i++) if (!isalnum((unsigned char)c[i]) && !strchr("\":,", c[i])) ok = false;
+      if (!ok) { s.send(400, "text/plain", "bad cmd"); return; }
+      en_boiler_cmd(c.c_str());
+      logout_printf("Bojler: írás %s (a %s kijelzőtől)\n", c.c_str(), from.c_str());
+    }
+    if (s.hasArg("auto") || s.hasArg("on_w")) {
+      const bool au = s.hasArg("auto") ? s.arg("auto").toInt() != 0 : en_cfg.bl_auto;
+      const int w = s.hasArg("on_w") ? (int)s.arg("on_w").toInt() : en_cfg.bl_on_w;
+      en_bl_auto_set(au, w);
+      en_bl_auto_save();
+      logout_printf("Bojler automatika: %s, %d W (a %s kijelzőtől)\n", au ? "be" : "ki", en_cfg.bl_on_w, from.c_str());
+    }
+  }
+  char b[48];
+  snprintf(b, sizeof(b), "auto=%d&on_w=%d", en_cfg.bl_auto ? 1 : 0, en_cfg.bl_on_w);
+  s.send(200, "text/plain", b);
+}
+
 // A bojler napelemes automatikája (másodpercenként): ha van elég napelem-többlet, bekapcsolja a bojlert (az a beállított
 // cél-hőfokig fűt), ha tartósan nincs, kikapcsolja (hiszterézissel, lásd EN_BA_*). A többlet = visszatáplálás + a bojler
 // saját fogyasztása (amit bekapcsolva elvesz a visszatáplálásból). Friss hálózati és bojler-adat nélkül nem kapcsol.
@@ -742,7 +870,7 @@ static void en_boiler_auto(const EnData &d) {
   static uint32_t since = 0, last_cmd = 0;
   const bool bl = en_fresh(d.bl_ms, EN_BL_STALE_MS), p1 = en_fresh(d.p1_ms, EN_LOCAL_STALE_MS);
   en_ba_avail = p1 ? -d.grid_w + (en_fresh(d.sk_ms, EN_LOCAL_STALE_MS) ? d.boil_w : 0.0f) : NAN;
-  if (!en_cfg.bl_auto || !bl || !p1 || d.boil_sw < 0) { since = 0; return; }
+  if (!en_cfg.bl_auto || en_cfg.bl_boss[0] || !bl || !p1 || d.boil_sw < 0) { since = 0; return; }   // csak a vezérlő kapcsol
   const bool on = d.boil_sw == 1;
   const bool change = on ? en_ba_avail < en_cfg.bl_on_w - EN_BA_HYST_W : en_ba_avail >= en_cfg.bl_on_w;
   if (!change) { since = 0; return; }
@@ -859,7 +987,13 @@ static String en_text() {
       if (d.boil_mode[0]) { snprintf(b, sizeof(b), tr(", üzemmód: %s", ", mode: %s"), d.boil_mode); h += b; }
     } else h += tr("még nincs adat", "no data yet");
     if (d.bl_err[0]) { h += " <span style='color:#ff8a80'>"; h += html_attr(d.bl_err); h += "</span>"; }
-    if (en_cfg.bl_auto) {
+    if (en_bl_remote()) {
+      const int au = en_bl_eff_auto(d);
+      if (au < 0) snprintf(b, sizeof(b), tr("<br>Bojler automatika: a vezérlő (%s) nem elérhető", "<br>Water heater automation: the controller (%s) is unreachable"), en_cfg.bl_boss);
+      else snprintf(b, sizeof(b), tr("<br>Bojler automatika: %s, %d W (a vezérlő: %s)", "<br>Water heater automation: %s, %d W (controller: %s)"),
+                    au ? tr("be", "on") : tr("ki", "off"), d.rb_on_w, en_cfg.bl_boss);
+      h += b;
+    } else if (en_cfg.bl_auto) {
       snprintf(b, sizeof(b), tr("<br>Bojler automatika: be (napelem-többlet: %d W felett bekapcsol, %d W alatt ki)",
                                 "<br>Water heater automation: on (solar surplus: switches on above %d W, off below %d W)"),
                en_cfg.bl_on_w, en_cfg.bl_on_w - EN_BA_HYST_W);
@@ -958,7 +1092,18 @@ static String en_settings_html() {
   } else h += tr("nincs megadva", "not set");
   h += "'><label style='display:block'><input type='checkbox' name='en_blkdel' style='width:auto;margin:0 8px 0 0'>";
   h += tr("Mentett kulcs törlése</label>", "Delete the saved key</label>");
-  h += "<label style='display:block'><input type='checkbox' name='en_ba'";
+  h += tr("<label>A bojler vezérlője (másik kijelző címe; üresen: ez a kijelző vezérel)</label>",
+          "<label>Water heater controller (another display's address; empty: this display controls it)</label>");
+  h += "<input name='en_bbo' maxlength='64' pattern='[A-Za-z0-9.:-]*' value='"; h += html_attr(en_cfg.bl_boss);
+  h += "'>";
+  if (en_cfg.bl_boss[0]) {   // távirányító: az automatika a vezérlőn állítható (a kijelzőn innen is, a Bojler fülön)
+    h += tr("<p style='color:#aaa;margin:0'>Az automatikát és a bojler írását a vezérlő kijelző végzi; a kijelző Bojler fülén "
+            "innen is állítható.</p>",
+            "<p style='color:#aaa;margin:0'>The automation and the writes to the heater are done by the controller display; "
+            "they can be changed from this display's Water heater tab too.</p>");
+    return h;
+  }
+  h += "<input type='hidden' name='en_baf' value='1'><label style='display:block'><input type='checkbox' name='en_ba'";
   if (en_cfg.bl_auto) h += " checked";
   h += " style='width:auto;margin:0 8px 0 0'>";
   h += tr("Napelemes automatika: a kijelző bekapcsolja a bojlert, ha van elég napelem-többlet (a beállított cél-hőfokig fűt), és "
@@ -1042,7 +1187,8 @@ static void en_settings_save(WebServer &s) {
     for (size_t i = 0; i < bk.length(); i++) if ((unsigned char)bk[i] < 0x20 || (unsigned char)bk[i] > 0x7E) ok = false;
     if (ok) strlcpy(c.bl_key, bk.c_str(), sizeof(c.bl_key));
   }
-  c.bl_auto = s.hasArg("en_ba");
+  if (s.hasArg("en_baf")) c.bl_auto = s.hasArg("en_ba");   // csak ha az automatika mezői az űrlapon voltak
+  en_host_arg(s, "en_bbo", c.bl_boss, sizeof(c.bl_boss));
   if (s.hasArg("en_bth")) {
     const long w = s.arg("en_bth").toInt();
     if (w >= EN_BA_MIN_W && w <= EN_BA_MAX_W) c.bl_on_w = (int)w;
@@ -1054,6 +1200,7 @@ static void en_settings_save(WebServer &s) {
     p.putBool("en_on", c.on);
     p.putBool("en_ba", c.bl_auto);
     p.putInt("en_bth", c.bl_on_w);
+    p.putString("en_bbo", c.bl_boss);
     p.putString("en_p1", c.p1);
     p.putString("en_sk", c.sk);
     p.putString("en_gt", c.gt);
@@ -1066,6 +1213,7 @@ static void en_settings_save(WebServer &s) {
     p.end();
   }
   const bool gw_changed = strcmp(c.gt, en_cfg.gt) != 0 || strcmp(c.gs, en_cfg.gs) != 0 || (c.on && !en_cfg.on);
+  const bool boss_changed = strcmp(c.bl_boss, en_cfg.bl_boss) != 0;
   portENTER_CRITICAL(&en_mux);
   en_cfg = c;
   if (gw_changed) en_gw_force = true;
@@ -1074,6 +1222,7 @@ static void en_settings_save(WebServer &s) {
   if (!c.p1[0]) { en_data.p1_ms = 0; en_data.p1_err[0] = 0; }
   if (!c.sk[0]) { en_data.sk_ms = 0; en_data.sk_err[0] = 0; }
   if (!c.bl[0] || !c.bl_id[0] || !c.bl_key[0]) { en_data.bl_ms = 0; en_data.bl_err[0] = 0; }
+  if (boss_changed) { en_data.rb_ms = 0; en_data.rb_err[0] = 0; }
   portEXIT_CRITICAL(&en_mux);
   logout_printf("Energia: beállítások mentve (%s)\n", c.on ? "be" : "ki");
 }

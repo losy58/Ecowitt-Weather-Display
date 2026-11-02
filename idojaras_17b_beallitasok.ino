@@ -119,7 +119,8 @@ static void st_refresh_boil() {
   if (!st_bl_info) return;
   const EnData d = en_snapshot();
   const bool ok = st_bl_ready(d);
-  char b[200];
+  const int au = en_bl_eff_auto(d), on_w = en_bl_eff_on_w(d);   // a távirányítón a vezérlőtől (-1: nem elérhető)
+  char b[240];
   if (ok) {
     snprintf(b, sizeof(b), tr("Most: %.0f °C", "Now: %.0f °C"), d.boil_temp);
     const char *st = strcmp(d.boil_state, "heating") == 0 ? tr("fűt", "heating") : strcmp(d.boil_state, "warm") == 0 ? tr("tartja", "keeping warm")
@@ -136,14 +137,22 @@ static void st_refresh_boil() {
     strlcpy(b, tr("A webes kezelőoldalon: Beállítások / Energia (be) és Bojler hőfoka (Tuya): cím, eszköz-ID, helyi kulcs.",
                   "On the web page: Settings / Energy (on) and Water heater temperature (Tuya): address, device ID, local key."), sizeof(b));
   else if (d.bl_err[0]) snprintf(b, sizeof(b), tr("Hiba: %s", "Error: %s"), d.bl_err);
+  else if (au < 0) snprintf(b, sizeof(b), tr("A vezérlő (%s) nem elérhető%s%s: az automatika nem állítható, a többi közvetlenül a bojlerhez megy.",
+                                             "The controller (%s) is unreachable%s%s: the automation cannot be changed, the rest goes to the heater directly."),
+                            en_cfg.bl_boss, d.rb_err[0] ? " - " : "", d.rb_err);
   else if (!isnan(en_ba_avail)) snprintf(b, sizeof(b), tr("Napelem-többlet most: %.0f W (visszatáplálás + a bojler fogyasztása)",
                                                           "Solar surplus now: %.0f W (export + the heater's own use)"), en_ba_avail);
   else strlcpy(b, tr("Napelem-többlet: nincs hálózati adat (P1)", "Solar surplus: no grid data (P1)"), sizeof(b));
+  if (ok && au >= 0 && en_bl_remote() && !d.bl_err[0]) {   // távirányító: ki a vezérlő
+    char t[96];
+    snprintf(t, sizeof(t), tr(" - vezérlő: %s", " - controller: %s"), en_cfg.bl_boss);
+    strlcat(b, t, sizeof(b));
+  }
   set_label_if_changed(st_bl_sub, b);
-  lv_obj_set_style_text_color(st_bl_sub, lv_color_hex(d.bl_err[0] ? COL_WARN : COL_GREY), 0);
+  lv_obj_set_style_text_color(st_bl_sub, lv_color_hex(d.bl_err[0] || (ok && au < 0) ? COL_WARN : COL_GREY), 0);
 
   const bool on = ok && d.boil_sw == 1;
-  set_label_if_changed(st_bl_lbl[ST_BL_R_SW], en_cfg.bl_auto ? tr("Bojler (automatika vezérli)", "Heater (automation in control)") : tr("Bojler (kézi)", "Heater (manual)"));
+  set_label_if_changed(st_bl_lbl[ST_BL_R_SW], au > 0 ? tr("Bojler (automatika vezérli)", "Heater (automation in control)") : au == 0 ? tr("Bojler (kézi)", "Heater (manual)") : tr("Bojler", "Heater"));
   set_label_if_changed(st_bl_sw_l, !ok || d.boil_sw < 0 ? "--" : on ? tr("Be", "On") : tr("Ki", "Off"));
   lv_obj_set_style_bg_color(st_bl_sw, lv_color_hex(on ? 0x2E7D32 : 0x555555), 0);
   const int mi = ok ? en_bl_mode_idx(d.boil_mode) : -1;
@@ -152,9 +161,10 @@ static void st_refresh_boil() {
   if (set >= 0) snprintf(b, sizeof(b), tr("Cél-hőfok: %d °C%s", "Target: %d °C%s"), set, mi == 1 ? tr(" (Eco: max. 55)", " (Eco: max. 55)") : "");
   else strlcpy(b, tr("Cél-hőfok: --", "Target: --"), sizeof(b));
   set_label_if_changed(st_bl_lbl[ST_BL_R_SET], b);
-  set_label_if_changed(st_ba_l, en_cfg.bl_auto ? tr("Be", "On") : tr("Ki", "Off"));
-  lv_obj_set_style_bg_color(st_ba, lv_color_hex(en_cfg.bl_auto ? 0x2E7D32 : 0x555555), 0);
-  snprintf(b, sizeof(b), tr("Bekapcsol: %d W többletnél", "On at: %d W surplus"), en_cfg.bl_on_w);
+  set_label_if_changed(st_ba_l, au > 0 ? tr("Be", "On") : au == 0 ? tr("Ki", "Off") : "--");
+  lv_obj_set_style_bg_color(st_ba, lv_color_hex(au > 0 ? 0x2E7D32 : 0x555555), 0);
+  if (au >= 0) snprintf(b, sizeof(b), tr("Bekapcsol: %d W többletnél", "On at: %d W surplus"), on_w);
+  else strlcpy(b, tr("Bekapcsol: -- W többletnél", "On at: -- W surplus"), sizeof(b));
   set_label_if_changed(st_bl_lbl[ST_BL_R_TH], b);
 }
 
@@ -522,7 +532,7 @@ static void settings_tap(int x, int y) {
       if (in_rect(x, y, ST_BTN_X, row(ST_BL_R_SW), ST_TOG_W, ST_BTN_H) && d.boil_sw >= 0) {   // kézi be/ki: az automatika kikapcsol
         en_boiler_cmd(d.boil_sw ? "\"1\":false" : "\"1\":true");
         logout_printf("Bojler: %s (kézzel, a kijelzőn)\n", d.boil_sw ? "kikapcsolás" : "bekapcsolás");
-        if (en_cfg.bl_auto) { en_bl_auto_set(false, en_cfg.bl_on_w); st_bl_dirty = true; }
+        if (en_bl_eff_auto(d) > 0 && en_bl_auto_change(false, en_bl_eff_on_w(d))) st_bl_dirty = true;
       }
       for (int i = 0; i < EN_BL_MODES; i++)
         if (in_rect(x, y, ST_CX + i * (ST_BL_MODE_W + ST_BL_MODE_GAP), row(ST_BL_R_MODE), ST_BL_MODE_W, ST_BTN_H)) {
@@ -537,9 +547,10 @@ static void settings_tap(int x, int y) {
         st_bl_set = constrain(cur + sdir, ST_BL_SET_MIN, ST_BL_SET_MAX);
         st_bl_set_ms = millis();
       }
-      if (in_rect(x, y, ST_BTN_X, row(ST_BL_R_AUTO), ST_TOG_W, ST_BTN_H)) { en_bl_auto_set(!en_cfg.bl_auto, en_cfg.bl_on_w); st_bl_dirty = true; }
+      const int au = en_bl_eff_auto(d), on_w = en_bl_eff_on_w(d);   // -1: a vezérlő nem elérhető, az automatika nem állítható
+      if (au >= 0 && in_rect(x, y, ST_BTN_X, row(ST_BL_R_AUTO), ST_TOG_W, ST_BTN_H) && en_bl_auto_change(!au, on_w)) st_bl_dirty = true;
       const int tdir = in_rect(x, y, ST_BTN_X, row(ST_BL_R_TH), ST_BTN_W, ST_BTN_H) ? -1 : in_rect(x, y, plus_x, row(ST_BL_R_TH), ST_BTN_W, ST_BTN_H) ? 1 : 0;
-      if (tdir) { en_bl_auto_set(en_cfg.bl_auto, en_cfg.bl_on_w + tdir * ST_BA_STEP_W); st_bl_dirty = true; }
+      if (au >= 0 && tdir && en_bl_auto_change(au, on_w + tdir * ST_BA_STEP_W)) st_bl_dirty = true;
       break;
     }
   }

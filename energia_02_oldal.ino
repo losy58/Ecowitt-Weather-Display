@@ -636,13 +636,13 @@ static void en_page_update() {
     lv_obj_set_style_text_color(en_boil_w, lv_color_hex(wb[0] ? boil_col : COL_GREY), 0);
   }
   if (en_boil_mode) set_label_if_changed(en_boil_mode, mode);
-  if (en_boil_badge) {   // kéz: kézi vezérlés, "A": napelemes automatika (csak ha a bojler Tuyán elérhető)
-    const bool au = en_cfg.bl_auto;
+  if (en_boil_badge) {   // kéz: kézi vezérlés, "A": napelemes automatika, "?": a vezérlő kijelző nem elérhető (csak ha a bojler Tuyán elérhető)
+    const int au = en_bl_eff_auto(d);
     lv_obj_set_hidden(en_boil_badge, !bl);
-    lv_obj_set_style_border_color(en_boil_badge, lv_color_hex(au ? COL_YELLOW : COL_GREY), 0);
-    lv_obj_set_style_text_color(en_boil_badge_l, lv_color_hex(au ? COL_YELLOW : COL_GREY), 0);
-    lv_obj_set_style_text_font(en_boil_badge_l, au ? &font_hu_14 : &font_sym_hand, 0);
-    set_label_if_changed(en_boil_badge_l, au ? "A" : EN_SYM_HAND);
+    lv_obj_set_style_border_color(en_boil_badge, lv_color_hex(au > 0 ? COL_YELLOW : COL_GREY), 0);
+    lv_obj_set_style_text_color(en_boil_badge_l, lv_color_hex(au > 0 ? COL_YELLOW : COL_GREY), 0);
+    lv_obj_set_style_text_font(en_boil_badge_l, au == 0 ? &font_sym_hand : &font_hu_14, 0);
+    set_label_if_changed(en_boil_badge_l, au > 0 ? "A" : au == 0 ? EN_SYM_HAND : "?");
   }
 
   // áramlás: a hálózat és a ház közt egyetlen vonal viszi a vételt (lila, hálózat -> ház) vagy a visszatáplálást

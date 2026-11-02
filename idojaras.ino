@@ -316,6 +316,7 @@ struct EnCfg {
   bool on; char p1[65], sk[65], gt[65], gs[65]; float kwp; char fw[130];
   char bl[65], bl_id[32], bl_key[20];   // bojler: Tuya-hálózat (helyi, titkosított), a hőfokhoz és az állapothoz
   bool bl_auto; int bl_on_w;            // bojler napelemes automatika: be/ki, ennyi W napelem-többletnél kapcsol be
+  char bl_boss[65];                     // a bojler vezérlője (főnök) másik kijelző: ennek címe; üres: ez a kijelző vezérel
 };   // fw: ide küldi tovább a napelem-adatot (címek vesszővel)
 struct EnData {
   uint32_t p1_ms; float grid_w, u[3], i[3], imp_kwh, exp_kwh; int tariff;
@@ -323,6 +324,7 @@ struct EnData {
   uint32_t gw_ms; float pv_w, pv_day, pv_month, pv_year; char gw_upd[24]; long plant_id; bool gw_remote;   // gw_remote: másik kijelzőtől kaptuk
   uint32_t bl_ms; float boil_temp, boil_water_pct; char boil_state[16], boil_mode[16];   // bojler: Tuya-hőfok (°C), kivehető melegvíz (%), állapot, üzemmód (gyártói név, pl. "jiheat")
   float boil_set; int8_t boil_sw;       // bojler: cél-hőfok (°C), be/ki (1/0, -1: nem tudjuk)
+  uint32_t rb_ms; bool rb_auto; int rb_on_w; char rb_err[48];   // távirányító kijelzőn: a vezérlő automatikája (a /bojler-ből)
   char p1_err[48], sk_err[48], gw_err[80], bl_err[48];   // az utolsó lekérés hibája (üres: sikeres)
 };
 // az energia oldal (energia_02) egy köre és egy áramlása (vonal, rajta mozgó pöttyök, érték)

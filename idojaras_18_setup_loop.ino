@@ -165,6 +165,7 @@ void app_setup() {
   if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
   my_server.on("/screenshot", HTTP_GET, handle_screenshot);   // képernyőkép BMP-ben (idojaras_17g)
   my_server.on("/energia", HTTP_POST, handle_energia_post);   // a másik kijelzőtől érkező napelem-adat (energia_01)
+  my_server.on("/bojler", handle_bojler);   // a bojler vezérlője: állapot (GET) és a távirányító kijelzők parancsai (POST)
   my_server.on("/ecowitt", HTTP_POST, handle_ecowitt_post);
   my_server.on("/ecowitt", HTTP_GET, handle_ecowitt_post);
   my_server.on("/clearcrash", HTTP_POST, handle_clear_crash);

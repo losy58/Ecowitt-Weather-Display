@@ -143,7 +143,7 @@ nap összesítője áll, **kivéve a Hőmérsékletet**: ott a „Max” / „Mi
 - Diagnosztika: az utolsó indulások oka és a coredump partícióba mentett összeomlás (`idojaras_12_diagnosztika.ino`).
 
 **Webes végpontok** (`app_setup()`): `/` és `/update` (kezelőoldal + OTA), `/settings`, `/raw` (konzolok nyers adatai),
-`/ecowitt` (adatfogadás; `?fwd=N`: továbbküldött adat, legfeljebb 3 lépés), `/energia` (POST: másik kijelzőtől továbbküldött napelem-adat), `/screenshot` (lásd „Képernyőkép”), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`; minden ismeretlen cím a beállító hálózaton a
+`/ecowitt` (adatfogadás; `?fwd=N`: továbbküldött adat, legfeljebb 3 lépés), `/energia` (POST: másik kijelzőtől továbbküldött napelem-adat), `/bojler` (a bojler vezérlője: GET állapot, POST a távirányító kijelzők parancsai), `/screenshot` (lásd „Képernyőkép”), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`; minden ismeretlen cím a beállító hálózaton a
 beállító oldalra irányít (`onNotFound`). mDNS név: `idojaras`.
 
 **Memória:** a belső RAM szűkös (`INTERNAL_RAM_RESERVE` marad a WiFi-nek); a nagy pufferek, az LVGL és az mbedTLS
@@ -213,6 +213,14 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   bekapcsolja a bojlert (DP 1), az a saját cél-hőfokáig fűt; ha 500 W-tal kevesebb 5 percig, kikapcsolja. Friss P1- és Tuya-adat
   nélkül nem kapcsol. NVS `cfg`/`en_ba`, `en_bth` (webes Beállításokban is). Csak EGY kijelzőn legyen bekapcsolva. Képernyőkép a
   fülről: `/screenshot?bojler=1`.
+- **Bojler-vezérlő (főnök) és távirányítók (v1.8.0, 2026.11.02., a felhasználó kérése: „a P4 legyen a főnök”):** webes
+  Beállítások „A bojler vezérlője” (NVS `cfg`/`en_bbo`): üresen az adott kijelző vezérel (a P4-en), egyébként a vezérlő címe
+  (a két 7B-n: `idojaras-p4.local`). Csak a vezérlő futtatja az automatikát. A távirányító 10 mp-enként lekéri a vezérlő
+  `GET /bojler` címéről (`auto=1&on_w=2000`) az automatika állapotát, és a dobozban/Bojler fülön azt mutatja (`en_bl_eff_auto()`;
+  „?” jel, ha a vezérlő 35 mp óta nem válaszol). A Bojler fül minden parancsa a vezérlőhöz megy (`POST /bojler`: `cmd=<DP-írás>`,
+  ill. `auto=`, `on_w=`; a sorban `@`-tal kezdődő elem az automatika), az írja a bojlert. Ha a vezérlő nem elérhető, a DP-írás
+  (Be/Ki, üzemmód, cél-hőfok) közvetlenül a bojlerhez megy, az automatika nem állítható. Így bármelyik kijelzőn váltva mind
+  ugyanazt mutatja (a felhasználó egyenrangú szinkront is felvetett; a főnökös változat mellett döntött, mert nem csúszhat el).
 - **S3-as 7B: OTA után az újraindítás oka néha `RTCWDT_RTC_RST`** (a szoftveres reset nem fejeződik be, az ESP-IDF tartalék RTC
   watchdogja végzi, kb. 1 mp múlva; a kijelző ártalmatlanul elindul). A `diag_init()` ezt kért újraindításnak jegyzi, ha a program
   maga kért újraindítást (`diag_mark_restart`). A P4-en nem fordult elő; az okát nem találtuk meg (a háttérfeladat leállítása
