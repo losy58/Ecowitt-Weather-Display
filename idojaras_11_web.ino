@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 // Firmware-frissítés a böngészőből: http://idojaras.local/ vagy http://<a lap IP-je>/  (.bin feltöltése)
 // ---------------------------------------------------------------------------
-static const char *FW_NAME = "Ecowitt Weather Display v1.9.0" FW_BOARD;
+static const char *FW_NAME = "Ecowitt Weather Display v1.10.0" FW_BOARD;
 static const char *MDNS_NAME = MDNS_HOST;   // a név a hálózaton (kijelzo.h): idojaras.local, ill. idojaras-p4.local
 
 static lv_obj_t *ota_ov = NULL, *ota_l1 = NULL, *ota_l2 = NULL, *ota_fill = NULL;
@@ -123,7 +123,7 @@ static void handle_settings_save() {
   if (cur_srv->hasArg("nt_t")) {
     String t = cur_srv->arg("nt_t"); t.trim();
     int mask = 0;
-    for (int i = 0; i < 6; i++) { char k[8]; snprintf(k, sizeof(k), "nt_b%d", i); if (cur_srv->hasArg(k)) mask |= 1 << i; }
+    for (int i = 0; i < 7; i++) { char k[8]; snprintf(k, sizeof(k), "nt_b%d", i); if (cur_srv->hasArg(k)) mask |= 1 << i; }
     if (t.isEmpty() || nt_topic_valid(t.c_str())) {
       strlcpy(cfg.nt_topic, t.c_str(), sizeof(cfg.nt_topic));
       cfg.nt_mask = mask;
@@ -280,10 +280,12 @@ static String rooms_html() {
 
 // Értesítések (ntfy.sh): téma és az egyes értesítések
 static String ntfy_html() {
-  static const char *NAMES[2][6] = {{"Fagy várható", "Eső várható", "Szellőztess (magas CO2)", "Lemerülő / hiányzó elem; P4: áramszünet (akkuról megy)",
-                                     "Elakadt adat (15 perce nem küld egy konzol)", "Újraindulás összeomlás vagy watchdog miatt"},
+  static const char *NAMES[2][7] = {{"Fagy várható", "Eső várható", "Szellőztess (magas CO2)", "Lemerülő / hiányzó elem; P4: áramszünet (akkuról megy)",
+                                     "Elakadt adat (15 perce nem küld egy konzol)", "Újraindulás összeomlás vagy watchdog miatt",
+                                     "Bojler: hibakód, napelemes automatika be/ki (csak a bojler vezérlője küldi)"},
                                     {"Frost expected", "Rain expected", "Ventilate (high CO2)", "Low / missing battery; P4: power failure (on battery)",
-                                     "Stale data (a console has not sent for 15 minutes)", "Restart because of a crash or watchdog"}};
+                                     "Stale data (a console has not sent for 15 minutes)", "Restart because of a crash or watchdog",
+                                     "Water heater: error code, solar automation on/off (sent by the heater's controller only)"}};
   String h = tr("<h3>Értesítések a telefonra (ntfy)</h3>"
                 "<p style='color:#aaa;margin:0'>Telepítsd a telefonra az ingyenes <b>ntfy</b> appot, és iratkozz fel ugyanarra a "
                 "témára, amit itt megadsz. A téma gyakorlatilag jelszó: legyen egyedi és nehezen kitalálható "
@@ -297,7 +299,7 @@ static String ntfy_html() {
   h += "<input name='nt_t' maxlength='64' pattern='[A-Za-z0-9_-]*' value='";
   h += html_attr(cfg.nt_topic);
   h += "'>";
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < 7; i++) {
     char b[256];
     snprintf(b, sizeof(b), "<label style='display:block'><input type='checkbox' name='nt_b%d'%s style='width:auto;margin:0 8px 0 0'>%s</label>",
              i, (cfg.nt_mask & (1 << i)) ? " checked" : "", NAMES[g_lang][i]);

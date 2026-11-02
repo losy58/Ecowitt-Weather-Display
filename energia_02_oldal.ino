@@ -287,9 +287,11 @@ static void en_page_create() {
 
   // ---- bal alul: a mai termelés (vászon; csak új adatnál rajzoljuk újra) ----
   lv_obj_t *zc = make_zone(page_en, EN_ZL_X, EN_ZC_Y, EN_ZL_W, EN_ZC_H, COL_BG_TL);
-  dlabel(zc, tr("Ma", "Today"), hu, COL_YELLOW, SX(16), SY(6));
-  en_ch_peak = dlabel(zc, "", sm, COL_GREY, SX(80), SY(16));
-  lv_obj_set_size(en_ch_peak, SX(190), S(20));
+  lv_obj_t *ch_title = dlabel(zc, tr("Ma", "Today"), hu, COL_YELLOW, SX(16), SY(6));
+  lv_obj_update_layout(ch_title);   // a csúcs felirata a cím után (az angol "Today" hosszabb, mint a "Ma")
+  const int peak_x = SX(16) + lv_obj_get_width(ch_title) + SX(12), peak_w = EN_ZL_W - SX(16) - 4 * SX(76) - peak_x;
+  en_ch_peak = dlabel(zc, "", sm, COL_GREY, peak_x, SY(16));
+  lv_obj_set_size(en_ch_peak, peak_w, S(20));
   lv_label_set_long_mode(en_ch_peak, LV_LABEL_LONG_DOT);
   {   // jelmagyarázat jobbra: termelés, saját fogyasztás, hálózati vétel, bojler
     static const char *const LEG[2][4] = {{"termelés", "saját", "vétel", "bojler"}, {"solar", "own use", "import", "heater"}};
@@ -635,7 +637,13 @@ static void en_page_update() {
     set_label_if_changed(en_boil_w, wb);
     lv_obj_set_style_text_color(en_boil_w, lv_color_hex(wb[0] ? boil_col : COL_GREY), 0);
   }
-  if (en_boil_mode) set_label_if_changed(en_boil_mode, mode);
+  if (en_boil_mode) {   // az üzemmód helyén a hibakód (pirosan), ha a bojler hibát jelez
+    char fe[40], ft[48];
+    en_bl_fault_text(bl ? d.boil_fault : 0, fe, sizeof(fe));
+    if (fe[0]) snprintf(ft, sizeof(ft), tr("Hiba: %s", "Error: %s"), fe);
+    set_label_if_changed(en_boil_mode, fe[0] ? ft : mode);
+    lv_obj_set_style_text_color(en_boil_mode, lv_color_hex(fe[0] ? COL_WARN : COL_GREY), 0);
+  }
   if (en_boil_badge) {   // kéz: kézi vezérlés, "A": napelemes automatika, "?": a vezérlő kijelző nem elérhető (csak ha a bojler Tuyán elérhető)
     const int au = en_bl_eff_auto(d);
     lv_obj_set_hidden(en_boil_badge, !bl);

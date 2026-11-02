@@ -281,7 +281,7 @@ constexpr bool TOUCH_SWIPE_INVERT     = false; // true: az ujjhúzás iránya fo
 // fw_on, fw_host: a konzolok adatainak továbbküldése egy másik kijelzőre (be/ki; cél: gépnév vagy IP, esetleg :port)
 struct Config { bool has_loc; double lat, lon; char tz[64]; char pw[33]; bool n_on; int n_st, n_en, n_pct, d_pct; int n_mode, n_so, n_ro;
                 char nt_topic[65]; int nt_mask; bool fw_on; char fw_host[65]; bool snd_on; int snd_vol; bool cam_on; };
-enum { NT_FROST = 1, NT_RAIN = 2, NT_CO2 = 4, NT_BATT = 8, NT_STALE = 16, NT_CRASH = 32, NT_ALL = 63 };
+enum { NT_FROST = 1, NT_RAIN = 2, NT_CO2 = 4, NT_BATT = 8, NT_STALE = 16, NT_CRASH = 32, NT_BOIL = 64, NT_ALL = 127 };   // NT_BOIL: bojler hibája, automatikája
 static Config cfg = {false, 0.0, 0.0, "", "", true, 22 * 60, 6 * 60, 2, 100, 0, 30, 0, "", NT_ALL, false, "", true, 1, true};
 struct NtMsg { char title[64]; char msg[200]; char tags[24]; uint8_t prio; };   // egy telefonos értesítés (idojaras_17c)
 static bool co2_vent[3] = {};   // helyiségenként: "szellőztess" állapot (hiszterézissel; a felső sor és az értesítés is ezt használja)
@@ -315,7 +315,8 @@ struct DemoVals { float to, rh, p, w, g, dir, sol, rate, ti[3], hi[3], co2[3]; }
 struct EnCfg {
   bool on; char p1[65], sk[65], gt[65], gs[65]; float kwp; char fw[130];
   char bl[65], bl_id[32], bl_key[20];   // bojler: Tuya-hálózat (helyi, titkosított), a hőfokhoz és az állapothoz
-  bool bl_auto; int bl_on_w;            // bojler napelemes automatika: be/ki, ennyi W napelem-többletnél kapcsol be
+  bool bl_auto; int bl_on_w;            // bojler napelemes automatika: be/ki, ennyi W napelem-többletnél vált a napelemes cél-hőfokra
+  int bl_t0, bl_t1;                     // az automatika cél-hőfokai (°C): alap (mindig) és napelemes (többletnél)
   char bl_boss[65];                     // a bojler vezérlője (főnök) másik kijelző: ennek címe; üres: ez a kijelző vezérel
   int8_t gw_slot;                       // Growatt-lekérés: -1 egyedül (5 percenként), 0..2: körben (EN_GW_RING_S), ennyiedik kijelzőként
 };   // fw: ide küldi tovább a napelem-adatot (címek vesszővel)
@@ -325,7 +326,8 @@ struct EnData {
   uint32_t gw_ms; float pv_w, pv_day, pv_month, pv_year; char gw_upd[24]; long plant_id; bool gw_remote;   // gw_remote: másik kijelzőtől kaptuk
   uint32_t bl_ms; float boil_temp, boil_water_pct; char boil_state[16], boil_mode[16];   // bojler: Tuya-hőfok (°C), kivehető melegvíz (%), állapot, üzemmód (gyártói név, pl. "jiheat")
   float boil_set; int8_t boil_sw;       // bojler: cél-hőfok (°C), be/ki (1/0, -1: nem tudjuk)
-  uint32_t rb_ms; bool rb_auto; int rb_on_w; char rb_err[48];   // távirányító kijelzőn: a vezérlő automatikája (a /bojler-ből)
+  int boil_fault;                       // bojler hibakódja (DP 20, bitmap: 1. bit E2, 2. E3, 3. E4; 0: nincs hiba, -1: nem tudjuk)
+  uint32_t rb_ms; bool rb_auto; int rb_on_w, rb_t0, rb_t1; char rb_err[48];   // távirányító kijelzőn: a vezérlő automatikája (a /bojler-ből)
   char p1_err[48], sk_err[48], gw_err[80], bl_err[48];   // az utolsó lekérés hibája (üres: sikeres)
 };
 // az energia oldal (energia_02) egy köre és egy áramlása (vonal, rajta mozgó pöttyök, érték)

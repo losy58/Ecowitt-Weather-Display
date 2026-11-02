@@ -214,9 +214,14 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   kéz (kézi) vagy „A” (napelemes automatika) jel. A kéz a `font_sym_hand.c` (Font Awesome Free „hand”, U+F256; 7B 16, P4 20 px,
   lv_font_conv `--range 0xF256`). A dobozra koppintva a Beállítások új **Bojler** füle nyílik (`settings_open_boiler()`): Be/Ki
   (kézi; ha az automatika be volt, kikapcsolja), a 4 üzemmód, cél-hőfok -/+ (30-75, az utolsó koppintás után 1,5 mp-cel küldi),
-  automatika be/ki és a bekapcsolási többlet -/+ (250 W-onként). **Automatika** (`en_boiler_auto()`, a felhasználó kérése szerint csak
-  ennyi): ha a napelem-többlet (= visszatáplálás + a bojler saját fogyasztása) legalább `bl_on_w` (alapból 2000 W) 2 percig,
-  bekapcsolja a bojlert (DP 1), az a saját cél-hőfokáig fűt; ha 500 W-tal kevesebb 5 percig, kikapcsolja. Friss P1- és Tuya-adat
+  automatika be/ki és a többlet-határ -/+ (250 W-onként). **Automatika (v1.10.0-tól két cél-hőfokkal**, a felhasználó kérése: a
+  korábbi be/ki változatnál napnyugta után kikapcsolt, és nem volt melegvíz): `en_boiler_auto()` a bojlert bekapcsolva és Azonnali
+  (`jiheat`) módban tartja (az Eco 55 °C-ra korlátoz), a cél-hőfoka (DP 9) az alap (`bl_t0`, 50 °C); ha a napelem-többlet (=
+  visszatáplálás + a bojler saját fogyasztása) legalább `bl_on_w` (2500 W) 2 percig, a napelemes (`bl_t1`, 75 °C); ha 500 W-tal
+  kevesebb 5 percig, vissza az alapra. Egyszerre egy írás, utána 60 mp vár. NVS `en_bt0`, `en_bt1`; a /bojler `t0=`, `t1=`.
+  Bekapcsolt automatikánál a Bojler fül „Cél-hőfok” sora az alapot állítja, alatta a napelemes; a Be/Ki gomb vagy egy üzemmód
+  választása kézire vált. **Hibakód** (DP 20, bitmap, 1. bit = E2): pirosan a dobozban az üzemmód helyén; a vezérlő ntfy-t küld
+  (új értesítéstípus: „Bojler”, `NT_BOIL` = 64, a hibakódról és az automatika váltásáról; a régi mentett maszkban ki van kapcsolva). Friss P1- és Tuya-adat
   nélkül nem kapcsol. NVS `cfg`/`en_ba`, `en_bth` (webes Beállításokban is). Csak EGY kijelzőn legyen bekapcsolva. Képernyőkép a
   fülről: `/screenshot?bojler=1`.
 - **Bojler-vezérlő (főnök) és távirányítók (v1.8.0, 2026.11.02., a felhasználó kérése: „a P4 legyen a főnök”):** webes

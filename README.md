@@ -34,6 +34,10 @@ Photos of the display in demo mode (made-up data, English interface).
     <td width="50%"><img src="docs/kepek/indoor-week.jpg" alt="Indoor temperature and CO2 per room, week view"><br><sub>Indoor temperature and CO2 per room, week view</sub></td>
     <td width="50%"><img src="docs/kepek/settings-location.jpg" alt="On-device settings: location"><br><sub>On-device settings: location</sub></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="docs/kepek/energy.jpg" alt="Energy page (real data)"><br><sub>Energy page (real data, screenshot)</sub></td>
+    <td width="50%"><img src="docs/kepek/water-heater.jpg" alt="On-device settings: water heater"><br><sub>On-device settings: water heater (screenshot)</sub></td>
+  </tr>
 </table>
 
 ## Features
@@ -47,10 +51,24 @@ Photos of the display in demo mode (made-up data, English interface).
   temperature chart; tap for full screen.
 - **Details** and **Log** pages.
 - **Energy** (optional, off by default): a HomeWizard P1 meter (grid), a HomeWizard Energy Socket (e.g. a water heater)
-  and a Growatt solar plant. A power-flow diagram (moving dots show the direction: import purple, export green), today's
-  import / export and heater consumption, voltage and current of the three phases, and a 24-hour chart of production,
-  own use and grid import. Set up on the web page; the Growatt token is entered on one display only, which forwards
-  the solar data to the others (Growatt rejects frequent requests).
+  and a Growatt solar plant. A power-flow picture (a pylon for the grid and a house with the solar roof and the water
+  heater; moving dots show the direction: import purple, export green), today's import / export and heater consumption,
+  voltage and current of the three phases, and a 24-hour chart of production, own use and grid import. Set up on the web
+  page. Growatt rejects frequent requests: either one display queries it and forwards the solar data to the others, or
+  several displays share the token and take turns (every 15.5 minutes each, 5 min 10 s apart), passing the data to each
+  other, so if one drops out the others cover.
+- **Water heater (Tuya)** (optional): a Tuya-based water heater on the local network (Tuya protocol 3.3, encrypted, no
+  cloud), with its device ID and local key. The Energy page shows the water temperature / target (e.g. `69/55°C`), the
+  mode, the available hot water, the power and a hand (manual) or **A** (automatic) mark; tapping it opens the
+  **Water heater** tab of the settings: on/off, the four modes, target temperature, and the **solar automation**: the
+  heater stays on and keeps a base target (e.g. 50 °C, so there is always hot water); when the solar surplus (export plus
+  the heater's own use) reaches a set value for 2 minutes, it heats up to the solar target (e.g. 75 °C), storing the free
+  energy as heat; when the surplus is 500 W lower for 5 minutes, it goes back to the base target (Instant mode, as Eco
+  limits the heater to 55 °C). One display is the
+  *controller* (runs the automation and writes to the heater), the others act as remote controls through it, so all of
+  them show the same state. Optional phone notifications for heater error codes and automatic switching. The data
+  points (DPs) were mapped on a **Thermex** water heater (1 on/off, 2 mode, 9 target, 10 temperature, 13 state, 14 hot
+  water %, 20 error code); other Tuya heaters may use different DPs.
 - **Several rooms:** indoor data of up to 3 consoles (e.g. WS3910, GW3000, WN1821) shown separately; outdoor data
   (e.g. WS90) comes from the first one, from the others only if the first is silent for 2 minutes.
 - **Colour warnings:** frost, heat, strong gusts, high UV, high CO2 ("ventilate"), low batteries, stale data.
@@ -177,7 +195,8 @@ Later updates can go over the air: upload `.pio/build/<environment>/firmware.bin
 | `/raw` | all fields of each console's last upload |
 | `/ecowitt` | data from the consoles (`?fwd=N`: forwarded data, forwarded at most 3 times) |
 | `/energia` | solar data forwarded from another display (POST) |
-| `/screenshot` | the current screen as a BMP (`?oldal=<page>` switches to a page first, `&szoba=<room>` sets the dashboard's room) |
+| `/bojler` | water heater controller: automation state (GET) and the remote displays' commands (POST) |
+| `/screenshot` | the current screen as a BMP (`?oldal=<page>` switches to a page first, `&szoba=<room>` sets the dashboard's room, `&bojler=1` opens the water heater tab) |
 | `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`, `/ntfytest`, `/clearcrash` | web page actions |
 
 Without a password anyone on the local network can reach the web page. Do not expose the display directly to the
@@ -192,7 +211,7 @@ in Hungarian.
 | File | Content |
 |---|---|
 | `idojaras.ino` | includes, pins, data types, shared variables, tunable constants (thresholds, colours), settings |
-| `energia_01_adatok.ino`, `energia_02_oldal.ino` | energy: HomeWizard / Growatt data in a background task, web settings, solar forwarding; the Energy page and its charts |
+| `energia_01_adatok.ino`, `energia_02_oldal.ino` | energy: HomeWizard / Growatt / Tuya water heater data in a background task, heater control and automation, web settings, solar forwarding; the Energy page and its charts |
 | `idojaras_02`…`_17g_*.ino` | display, time and brightness, history, forecast, dashboard, consoles, forwarding, charts, web, diagnostics, touch, settings, notifications, demo, RTC and battery, screenshot |
 | `idojaras_18_setup_loop.ino` | UI construction, startup, main loop |
 | `wifi_manager.cpp/.h` | WiFi connection and setup network |
@@ -213,6 +232,7 @@ notifications, forwarding and the energy data run as background tasks. Settings 
 | `p4/esp_lcd_touch_gsl3680.*` (with the GSL3680 controller firmware) | board vendor's example code | not stated |
 | `font_hu_*`, `p4/font_hu_*` | [Roboto](https://fonts.google.com/specimen/Roboto) | Apache-2.0 / OFL-1.1 |
 | `font_seg_*`, `p4/font_seg_*` | [DSEG7 Classic](https://github.com/keshikan/DSEG) | OFL-1.1 |
+| `font_sym_hand.c`, `p4/font_sym_hand.c` | [Font Awesome Free](https://fontawesome.com) "hand" icon | CC BY 4.0 (icon) / OFL-1.1 (font) |
 | LVGL (installed separately) | lvgl.io | MIT |
 | `docs/esp-web-tools/` (web installer, own build with esptool-js 0.7.0) | [ESP Web Tools](https://github.com/esphome/esp-web-tools) | Apache-2.0 |
 

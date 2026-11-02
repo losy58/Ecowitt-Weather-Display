@@ -34,6 +34,10 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
     <td width="50%"><img src="docs/kepek/indoor-week.jpg" alt="Benti hőmérséklet és CO2 helyiségenként, heti nézet"><br><sub>Benti hőmérséklet és CO2 helyiségenként, heti nézet</sub></td>
     <td width="50%"><img src="docs/kepek/settings-location.jpg" alt="Beállítások a kijelzőn: hely"><br><sub>Beállítások a kijelzőn: hely</sub></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="docs/kepek/energy.jpg" alt="Energia oldal (valódi adatok)"><br><sub>Energia oldal (valódi adatok, képernyőkép)</sub></td>
+    <td width="50%"><img src="docs/kepek/water-heater.jpg" alt="Beállítások a kijelzőn: bojler"><br><sub>Beállítások a kijelzőn: bojler (képernyőkép)</sub></td>
+  </tr>
 </table>
 
 ## Tudnivalók
@@ -47,10 +51,22 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
   jelölve; koppintásra teljes képernyőn.
 - **Részletes adatok** és **Napló** oldal (a program eseményei).
 - **Energia** (nem kötelező, alapból ki): HomeWizard P1 mérő (hálózat), HomeWizard Energy Socket (pl. bojler) és
-  Growatt napelem. Energiaáramlás-ábra (a mozgó pöttyök az irányt mutatják: vétel lila, visszatáplálás zöld), a mai vétel /
-  leadás és a bojler fogyasztása, a három fázis feszültsége és árama, és egy 24 órás diagram a termelésről, a saját
-  fogyasztásról és a hálózati vételről. A kezelőoldalon állítható; a Growatt-token csak egy kijelzőn kell, az továbbküldi
-  a napelem adatát a többinek (a Growatt a sűrű lekérdezést elutasítja).
+  Growatt napelem. Energiaáramlás-kép (villanyoszlop a hálózatnak, egy ház a napelemes tetővel és a bojlerrel; a mozgó
+  pöttyök az irányt mutatják: vétel lila, visszatáplálás zöld), a mai vétel / leadás és a bojler fogyasztása, a három fázis
+  feszültsége és árama, és egy 24 órás diagram a termelésről, a saját fogyasztásról és a hálózati vételről. A kezelőoldalon
+  állítható. A Growatt a sűrű lekérdezést elutasítja: vagy egy kijelző kérdezi és továbbküldi a napelem adatát a többinek,
+  vagy több kijelzőn ugyanaz a token, és felváltva kérdeznek (mindegyik 15,5 percenként, 5 perc 10 mp eltolással), az adatot
+  egymásnak továbbküldve; ha egy kiesik, a többi pótolja.
+- **Bojler (Tuya)** (nem kötelező): Tuya-alapú bojler a helyi hálózaton (Tuya 3.3 protokoll, titkosítva, felhő nélkül), az
+  eszköz-azonosítóval és a helyi kulccsal. Az Energia oldalon a víz hőfoka / cél-hőfoka (pl. `69/55°C`), az üzemmód, a
+  kivehető melegvíz, a teljesítmény és egy kéz (kézi) vagy **A** (automata) jel; rákoppintva a Beállítások **Bojler** füle
+  nyílik: be/ki, a négy üzemmód, cél-hőfok és a **napelemes automatika**: a bojler bekapcsolva marad, és egy alap
+  cél-hőfokot tart (pl. 50 °C, így mindig van melegvíz); ha a napelem-többlet (visszatáplálás + a bojler saját fogyasztása)
+  2 percig eléri a megadott értéket, a napelemes cél-hőfokig fűt (pl. 75 °C), az ingyen energiát hőként tárolva; ha 5 percig
+  500 W-tal kevesebb, vissza az alapra (Azonnali módban, mert az Eco 55 °C-ra korlátoz). Egy kijelző a *vezérlő* (ő futtatja az automatikát és ő írja a bojlert), a többi rajta
+  keresztül távirányító, így mind ugyanazt mutatja. Telefonos értesítés a bojler hibakódjáról és az automatikus
+  kapcsolásról (beállítható). Az adatpontok (DP-k) egy **Thermex** bojleren lettek azonosítva (1 be/ki, 2 üzemmód, 9
+  cél-hőfok, 10 hőfok, 13 állapot, 14 melegvíz %, 20 hibakód); más Tuya-bojler más DP-ket használhat.
 - **Több helyiség:** legfeljebb 3 konzol (pl. WS3910, GW3000, WN1821) benti adatai külön; a kinti adat (pl. WS90) az
   elsőtől jön, a többitől csak akkor, ha az első 2 percig hallgat.
 - **Figyelmeztetések** színnel: fagy, hőség, erős lökés, magas UV, magas CO2 („Szellőztess”), lemerülő elemek,
@@ -179,7 +195,8 @@ Később a frissítés OTA-n is megy: a `.pio/build/<környezet>/firmware.bin` f
 | `/raw` | a konzolok utolsó küldésének összes mezője |
 | `/ecowitt` | adatfogadás a konzoloktól (`?fwd=N`: továbbküldött adat, legfeljebb 3-szor küldi tovább) |
 | `/energia` | másik kijelzőtől továbbküldött napelem-adat (POST) |
-| `/screenshot` | a mostani képernyő BMP-ben (`?oldal=<oldal>` előbb átvált arra az oldalra, `&szoba=<helyiség>` a főoldal helyiségét állítja) |
+| `/bojler` | a bojler vezérlője: az automatika állapota (GET) és a távirányító kijelzők parancsai (POST) |
+| `/screenshot` | a mostani képernyő BMP-ben (`?oldal=<oldal>` előbb átvált arra az oldalra, `&szoba=<helyiség>` a főoldal helyiségét állítja, `&bojler=1` a Bojler fület nyitja meg) |
 | `/settings`, `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`, `/ntfytest`, `/clearcrash` | a kezelőoldal műveletei |
 
 A kezelőoldal jelszava a beállításoknál adható meg; jelszó nélkül a helyi hálózaton bárki eléri. A kijelzőt ne tedd
@@ -193,7 +210,7 @@ egy fordítási egységgé fűzi össze, ezért a számozás a sorrendet határo
 | Fájl | Tartalom |
 |---|---|
 | `idojaras.ino` | include-ok, pin-ek, adattípusok, közös változók, hangolható konstansok (küszöbök, színek), beállítások |
-| `energia_01_adatok.ino`, `energia_02_oldal.ino` | energia: HomeWizard / Growatt adatok háttérfeladatban, webes beállítások, napelem-adat továbbküldése; az Energia oldal és diagramja |
+| `energia_01_adatok.ino`, `energia_02_oldal.ino` | energia: HomeWizard / Growatt / Tuya-bojler adatok háttérfeladatban, a bojler vezérlése és automatikája, webes beállítások, napelem-adat továbbküldése; az Energia oldal és diagramja |
 | `idojaras_02`…`_17g_*.ino` | kijelző, idő és fényerő, előzmények, előrejelzés, főoldal, konzolok, továbbküldés, grafikonok, web, diagnosztika, érintés, beállítások, értesítések, bemutató, óra és akku, képernyőkép |
 | `idojaras_18_setup_loop.ino` | a felület felépítése, indulás, főciklus |
 | `wifi_manager.cpp/.h` | WiFi-kapcsolódás és beállító hálózat |
@@ -214,6 +231,7 @@ ntfy-küldés, a továbbküldés és az energia-adatok lekérése megy háttérf
 | `p4/esp_lcd_touch_gsl3680.*` (a GSL3680 vezérlő firmware-jével) | a lap gyártójának példaprogramja | nincs megjelölve |
 | `font_hu_*`, `p4/font_hu_*` | [Roboto](https://fonts.google.com/specimen/Roboto) | Apache-2.0 / OFL-1.1 |
 | `font_seg_*`, `p4/font_seg_*` | [DSEG7 Classic](https://github.com/keshikan/DSEG) | OFL-1.1 |
+| `font_sym_hand.c`, `p4/font_sym_hand.c` | [Font Awesome Free](https://fontawesome.com) „hand” ikon | CC BY 4.0 (ikon) / OFL-1.1 (font) |
 | LVGL (külön telepítendő) | lvgl.io | MIT |
 | `docs/esp-web-tools/` (webes telepítő, saját fordítás esptool-js 0.7.0-val) | [ESP Web Tools](https://github.com/esphome/esp-web-tools) | Apache-2.0 |
 

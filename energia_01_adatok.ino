@@ -11,6 +11,8 @@ static void logout_printf(const char *fmt, ...);     // idojaras_02 (a Naplóba)
 static bool get_local_tm(struct tm &t);              // idojaras_03
 static bool fw_host_valid(const char *h);            // idojaras_06b (gépnév vagy IP, esetleg :port)
 static String html_attr(const char *s);              // idojaras_11
+static void nt_push(const char *title, const char *msg, uint8_t prio, const char *tags);   // idojaras_17c
+static bool is_night();                              // idojaras_03
 
 constexpr uint32_t EN_LOCAL_MS = 2000;               // P1 és dugalj lekérése ilyen gyakran
 constexpr uint32_t EN_LOCAL_ERR_MS = 10000;          // ha egyik sem válaszol: ennyi idő múlva újra
@@ -27,9 +29,12 @@ constexpr int EN_GW_SLOTS = 3;
 constexpr uint32_t EN_BL_MS = 30000, EN_BL_RETRY_MS = 60000;   // bojler Tuya-hőfok: 30 mp-enként, hiba után 1 perc
 constexpr uint32_t EN_BL_STALE_MS = 90000;
 constexpr uint32_t EN_BL_AFTER_CMD_MS = 1500;          // írás után ennyivel kérdezzük le újra
-// bojler napelemes automatika: bekapcsol, ha a napelem-többlet (visszatáplálás + a bojler saját fogyasztása) legalább
-// bl_on_w, EN_BA_ON_MS óta; kikapcsol, ha EN_BA_HYST_W-tal kevesebb, EN_BA_OFF_MS óta (hiszterézis: a felhők ne kapcsolgassák)
+// bojler napelemes automatika: a bojler mindig be van kapcsolva (nem Eco módban, mert az 55 °C-ra korlátoz), és a cél-hőfoka az
+// alap (bl_t0); ha a napelem-többlet (visszatáplálás + a bojler saját fogyasztása) legalább bl_on_w, EN_BA_ON_MS óta, a napelemes
+// (bl_t1); ha EN_BA_HYST_W-tal kevesebb, EN_BA_OFF_MS óta, újra az alap (hiszterézis: a felhők ne kapcsolgassák)
 constexpr int EN_BA_DEF_W = 2000, EN_BA_HYST_W = 500, EN_BA_MIN_W = 250, EN_BA_MAX_W = 8000;
+constexpr int EN_BA_DEF_T0 = 50, EN_BA_DEF_T1 = 75, EN_BA_T_MIN = 30, EN_BA_T_MAX = 75;
+#define EN_BA_MODE "jiheat"   // az automatika üzemmódja (Azonnali: a beállított cél-hőfokot tartja)
 constexpr uint32_t EN_BA_ON_MS = 2UL * 60UL * 1000UL, EN_BA_OFF_MS = 5UL * 60UL * 1000UL, EN_BA_RETRY_MS = 60000;
 // Bojler-vezérlő (főnök): egyetlen kijelző futtatja az automatikát (bl_boss üres); a többin (távirányító, bl_boss = a vezérlő címe)
 // a Bojler fül parancsai a vezérlő /bojler címére mennek, és onnan kérdezik le 10 mp-enként az automatika állapotát. Ha a vezérlő
@@ -432,6 +437,7 @@ static bool en_fetch_boiler(const EnCfg &c) {
   float temp = NAN, set = NAN, water_pct = NAN;
   char state[16] = "", mode[16] = "";
   int8_t sw = -1;
+  int fault = -1;
   bool ok = en_tuya_xchg(c, EN_BL_CMD_QUERY, NULL, js, sizeof(js), err, sizeof(err));
   if (ok) {
     temp = en_json_f(js, "10");
@@ -440,6 +446,8 @@ static bool en_fetch_boiler(const EnCfg &c) {
     en_json_str(js, "13", state, sizeof(state));
     en_json_str(js, "2", mode, sizeof(mode));
     water_pct = en_json_f(js, "14");
+    double f;
+    if (en_json_num(js, "20", f)) fault = (int)f;
     ok = !isnan(temp);
     if (!ok) strlcpy(err, tr("hiányzó adat", "missing data"), sizeof(err));
   }
@@ -448,6 +456,7 @@ static bool en_fetch_boiler(const EnCfg &c) {
     en_data.boil_temp = temp;
     en_data.boil_set = set;
     en_data.boil_sw = sw;
+    en_data.boil_fault = fault;
     en_data.boil_water_pct = water_pct;
     strlcpy(en_data.boil_state, state, sizeof(en_data.boil_state));
     strlcpy(en_data.boil_mode, mode, sizeof(en_data.boil_mode));
@@ -525,11 +534,12 @@ static bool en_boss_http(const EnCfg &c, const char *body, char *resp, size_t re
 // a vezérlő automatikájának lekérése (távirányító kijelzőn, a háttérfeladatban)
 static bool en_boss_get(const EnCfg &c) {
   char resp[96], err[48] = "";
-  int au = 0, w = 0;
+  int au = 0, w = 0, t0 = EN_BA_DEF_T0, t1 = EN_BA_DEF_T1;
   bool ok = en_boss_http(c, NULL, resp, sizeof(resp), err, sizeof(err));
   if (ok && !(en_form_int(resp, "auto", au) && en_form_int(resp, "on_w", w))) { ok = false; strlcpy(err, tr("hibás válasz", "invalid response"), sizeof(err)); }
+  if (ok) { en_form_int(resp, "t0", t0); en_form_int(resp, "t1", t1); }
   portENTER_CRITICAL(&en_mux);
-  if (ok) { en_data.rb_auto = au != 0; en_data.rb_on_w = w; en_data.rb_ms = millis(); }
+  if (ok) { en_data.rb_auto = au != 0; en_data.rb_on_w = w; en_data.rb_t0 = t0; en_data.rb_t1 = t1; en_data.rb_ms = millis(); }
   strlcpy(en_data.rb_err, err, sizeof(en_data.rb_err));
   portEXIT_CRITICAL(&en_mux);
   return ok;
@@ -538,7 +548,7 @@ static bool en_boss_get(const EnCfg &c) {
 // egy parancs a vezérlőnek: "@auto=1&on_w=2000" (az automatika) vagy DP-írás ("\"1\":true" -> cmd=...); a DP-írás, ha a
 // vezérlő nem elérhető, közvetlenül a bojlerhez megy
 static void en_boss_cmd(const EnCfg &c, const char *cmd) {
-  char body[3 * EN_BL_CMD_LEN + 8], resp[96], err[48] = "";
+  char body[3 * EN_BL_CMD_LEN + 8], resp[96], err[48] = "";   // (az automatika parancsa @-cal: EN_BL_CMD_LEN-be fér)
   if (cmd[0] == '@') strlcpy(body, cmd + 1, sizeof(body));
   else {
     int n = snprintf(body, sizeof(body), "cmd=");
@@ -550,9 +560,12 @@ static void en_boss_cmd(const EnCfg &c, const char *cmd) {
   }
   const bool ok = en_boss_http(c, body, resp, sizeof(resp), err, sizeof(err));
   if (!ok && cmd[0] != '@' && c.bl[0] && c.bl_id[0] && c.bl_key[0]) { en_boiler_control(c, cmd); return; }   // tartalék: közvetlenül
-  int au, w;
+  int au, w, t0, t1;
   portENTER_CRITICAL(&en_mux);
-  if (ok && en_form_int(resp, "auto", au) && en_form_int(resp, "on_w", w)) { en_data.rb_auto = au != 0; en_data.rb_on_w = w; en_data.rb_ms = millis(); }
+  if (ok && en_form_int(resp, "auto", au) && en_form_int(resp, "on_w", w)) {
+    en_data.rb_auto = au != 0; en_data.rb_on_w = w; en_data.rb_ms = millis();
+    if (en_form_int(resp, "t0", t0) && en_form_int(resp, "t1", t1)) { en_data.rb_t0 = t0; en_data.rb_t1 = t1; }
+  }
   if (!ok) strlcpy(en_data.rb_err, err, sizeof(en_data.rb_err));
   snprintf(en_bl_res, sizeof(en_bl_res), "%s -> %s: %s", cmd, c.bl_boss, ok ? "OK" : err);
   en_bl_res_n++;
@@ -778,6 +791,8 @@ static void en_cfg_load() {
   c.bl_auto = p.isKey("en_ba") && p.getBool("en_ba", false);
   c.bl_on_w = p.isKey("en_bth") ? constrain(p.getInt("en_bth", EN_BA_DEF_W), EN_BA_MIN_W, EN_BA_MAX_W) : EN_BA_DEF_W;
   strlcpy(c.bl_boss, pref_str(p, "en_bbo", "").c_str(), sizeof(c.bl_boss));
+  c.bl_t0 = p.isKey("en_bt0") ? constrain(p.getInt("en_bt0", EN_BA_DEF_T0), EN_BA_T_MIN, EN_BA_T_MAX) : EN_BA_DEF_T0;
+  c.bl_t1 = p.isKey("en_bt1") ? constrain(p.getInt("en_bt1", EN_BA_DEF_T1), EN_BA_T_MIN, EN_BA_T_MAX) : EN_BA_DEF_T1;
   EnDay day;
   if (p.isKey("en_day") && p.getBytesLength("en_day") == sizeof(day) && p.getBytes("en_day", &day, sizeof(day)) == sizeof(day)) en_day = day;
   p.end();
@@ -786,6 +801,7 @@ static void en_cfg_load() {
   en_data.pv_day = en_data.pv_month = en_data.pv_year = NAN;   // amíg nincs napelem-adat, "--" (nem 0)
   en_data.boil_set = NAN;
   en_data.boil_sw = -1;
+  en_data.boil_fault = -1;
   portEXIT_CRITICAL(&en_mux);
   en_pv_load();
 }
@@ -813,10 +829,12 @@ static void en_day_task(const EnData &d) {
 }
 
 // A bojler automatikájának beállítása (a kijelzőn): azonnal érvényes, a mentés külön (en_bl_auto_save)
-static void en_bl_auto_set(bool on, int w) {
+static void en_bl_auto_set(bool on, int w, int t0, int t1) {
   portENTER_CRITICAL(&en_mux);
   en_cfg.bl_auto = on;
   en_cfg.bl_on_w = constrain(w, EN_BA_MIN_W, EN_BA_MAX_W);
+  en_cfg.bl_t0 = constrain(t0, EN_BA_T_MIN, EN_BA_T_MAX);
+  en_cfg.bl_t1 = constrain(t1, en_cfg.bl_t0, EN_BA_T_MAX);   // a napelemes nem lehet kisebb az alapnál
   portEXIT_CRITICAL(&en_mux);
 }
 static void en_bl_auto_save() {
@@ -825,6 +843,8 @@ static void en_bl_auto_save() {
   p.begin("cfg", false);
   p.putBool("en_ba", en_cfg.bl_auto);
   p.putInt("en_bth", en_cfg.bl_on_w);
+  p.putInt("en_bt0", en_cfg.bl_t0);
+  p.putInt("en_bt1", en_cfg.bl_t1);
   p.end();
 }
 
@@ -836,21 +856,26 @@ static int en_bl_eff_auto(const EnData &d) {
   return en_fresh(d.rb_ms, EN_RB_STALE_MS) ? d.rb_auto : -1;
 }
 static int en_bl_eff_on_w(const EnData &d) { return en_bl_remote() ? d.rb_on_w : en_cfg.bl_on_w; }
+static int en_bl_eff_t0(const EnData &d) { return en_bl_remote() ? d.rb_t0 : en_cfg.bl_t0; }
+static int en_bl_eff_t1(const EnData &d) { return en_bl_remote() ? d.rb_t1 : en_cfg.bl_t1; }
 
 // Az automatika váltása a kijelző Bojler füléről: a vezérlőn helyben (true: menteni kell), a távirányítón parancs a vezérlőnek
-static bool en_bl_auto_change(bool on, int w) {
+static bool en_bl_auto_change(bool on, int w, int t0, int t1) {
   w = constrain(w, EN_BA_MIN_W, EN_BA_MAX_W);
-  if (!en_bl_remote()) { en_bl_auto_set(on, w); return true; }
+  t0 = constrain(t0, EN_BA_T_MIN, EN_BA_T_MAX);
+  t1 = constrain(t1, t0, EN_BA_T_MAX);
+  if (!en_bl_remote()) { en_bl_auto_set(on, w, t0, t1); return true; }
   char cmd[EN_BL_CMD_LEN];
-  snprintf(cmd, sizeof(cmd), "@auto=%d&on_w=%d", on ? 1 : 0, w);
+  snprintf(cmd, sizeof(cmd), "@auto=%d&on_w=%d&t0=%d&t1=%d", on ? 1 : 0, w, t0, t1);
   en_boiler_cmd(cmd);
   portENTER_CRITICAL(&en_mux);
-  en_data.rb_auto = on; en_data.rb_on_w = w;   // azonnal látsszon (a válasz megerősíti)
+  en_data.rb_auto = on; en_data.rb_on_w = w; en_data.rb_t0 = t0; en_data.rb_t1 = t1;   // azonnal látsszon (a válasz megerősíti)
   portEXIT_CRITICAL(&en_mux);
   return false;
 }
 
-// A vezérlő kijelző végpontja: GET /bojler -> "auto=1&on_w=2000"; POST /bojler cmd=<DP-írás> és/vagy auto=0|1, on_w=<W>
+// A vezérlő kijelző végpontja: GET /bojler -> "auto=1&on_w=2000&t0=50&t1=75"; POST /bojler cmd=<DP-írás> és/vagy auto=0|1,
+// on_w=<W>, t0=, t1=<°C>
 // (a távirányító kijelzőktől). Csak a vezérlőn (bl_boss üres) fogad parancsot.
 static void handle_bojler() {
   WebServer &s = my_server;
@@ -866,37 +891,90 @@ static void handle_bojler() {
       en_boiler_cmd(c.c_str());
       logout_printf("Bojler: írás %s (a %s kijelzőtől)\n", c.c_str(), from.c_str());
     }
-    if (s.hasArg("auto") || s.hasArg("on_w")) {
+    if (s.hasArg("auto") || s.hasArg("on_w") || s.hasArg("t0") || s.hasArg("t1")) {
       const bool au = s.hasArg("auto") ? s.arg("auto").toInt() != 0 : en_cfg.bl_auto;
       const int w = s.hasArg("on_w") ? (int)s.arg("on_w").toInt() : en_cfg.bl_on_w;
-      en_bl_auto_set(au, w);
+      const int t0 = s.hasArg("t0") ? (int)s.arg("t0").toInt() : en_cfg.bl_t0, t1 = s.hasArg("t1") ? (int)s.arg("t1").toInt() : en_cfg.bl_t1;
+      en_bl_auto_set(au, w, t0, t1);
       en_bl_auto_save();
-      logout_printf("Bojler automatika: %s, %d W (a %s kijelzőtől)\n", au ? "be" : "ki", en_cfg.bl_on_w, from.c_str());
+      logout_printf("Bojler automatika: %s, %d W, %d/%d °C (a %s kijelzőtől)\n", au ? "be" : "ki", en_cfg.bl_on_w, en_cfg.bl_t0, en_cfg.bl_t1, from.c_str());
     }
   }
-  char b[48];
-  snprintf(b, sizeof(b), "auto=%d&on_w=%d", en_cfg.bl_auto ? 1 : 0, en_cfg.bl_on_w);
+  char b[64];
+  snprintf(b, sizeof(b), "auto=%d&on_w=%d&t0=%d&t1=%d", en_cfg.bl_auto ? 1 : 0, en_cfg.bl_on_w, en_cfg.bl_t0, en_cfg.bl_t1);
   s.send(200, "text/plain", b);
 }
 
-// A bojler napelemes automatikája (másodpercenként): ha van elég napelem-többlet, bekapcsolja a bojlert (az a beállított
-// cél-hőfokig fűt), ha tartósan nincs, kikapcsolja (hiszterézissel, lásd EN_BA_*). A többlet = visszatáplálás + a bojler
-// saját fogyasztása (amit bekapcsolva elvesz a visszatáplálásból). Friss hálózati és bojler-adat nélkül nem kapcsol.
+// A bojler napelemes automatikája (másodpercenként; csak a vezérlőn): a bojlert bekapcsolva és nem Eco módban tartja (Eco-ban a
+// bojler 55 °C-ra korlátoz), a cél-hőfoka az alap (bl_t0), napelem-többletnél a napelemes (bl_t1), hiszterézissel (EN_BA_*).
+// A többlet = visszatáplálás + a bojler saját fogyasztása (amit fűtés közben elvesz a visszatáplálásból). Friss hálózati és
+// bojler-adat nélkül nem ír. Egy körben legfeljebb egy írás, utána EN_BA_RETRY_MS-ig vár (amíg a lekérdezés megerősíti).
 static float en_ba_avail = NAN;   // a legutóbbi többlet (W; NAN: nem számolható), a Beállításokban látszik
+static int8_t en_ba_solar = -1;   // napelemes cél-hőfok van-e érvényben (-1: még nem tudjuk; az első adatból: cél >= bl_t1)
 static void en_boiler_auto(const EnData &d) {
   static uint32_t since = 0, last_cmd = 0;
   const bool bl = en_fresh(d.bl_ms, EN_BL_STALE_MS), p1 = en_fresh(d.p1_ms, EN_LOCAL_STALE_MS);
   en_ba_avail = p1 ? -d.grid_w + (en_fresh(d.sk_ms, EN_LOCAL_STALE_MS) ? d.boil_w : 0.0f) : NAN;
-  if (!en_cfg.bl_auto || en_cfg.bl_boss[0] || !bl || !p1 || d.boil_sw < 0) { since = 0; return; }   // csak a vezérlő kapcsol
-  const bool on = d.boil_sw == 1;
-  const bool change = on ? en_ba_avail < en_cfg.bl_on_w - EN_BA_HYST_W : en_ba_avail >= en_cfg.bl_on_w;
-  if (!change) { since = 0; return; }
-  if (!since) since = millis();
-  if (millis() - since < (on ? EN_BA_OFF_MS : EN_BA_ON_MS)) return;
+  if (!en_cfg.bl_auto || en_cfg.bl_boss[0]) { since = 0; en_ba_solar = -1; return; }   // csak a vezérlő kapcsol
+  if (!bl || !p1 || d.boil_sw < 0 || isnan(d.boil_set)) { since = 0; return; }
+  if (en_ba_solar < 0) en_ba_solar = d.boil_set >= en_cfg.bl_t1 - 0.5f;
+  // hiszterézis: napelemes cél-hőfokra váltás / vissza
+  const bool want = en_ba_solar ? en_ba_avail >= en_cfg.bl_on_w - EN_BA_HYST_W : en_ba_avail >= en_cfg.bl_on_w;
+  if (want == (bool)en_ba_solar) since = 0;
+  else {
+    if (!since) since = millis();
+    if (millis() - since >= (en_ba_solar ? EN_BA_OFF_MS : EN_BA_ON_MS)) {
+      en_ba_solar = want;
+      since = 0;
+      logout_printf("Bojler: napelemes automatika: %s (többlet %.0f W)\n", want ? "napelemes cél-hőfok" : "alap cél-hőfok", en_ba_avail);
+      if ((cfg.nt_mask & NT_BOIL) && !is_night()) {   // halk értesítés (a csendes időszakban nem)
+        char title[64], msg[120];
+        snprintf(title, sizeof(title), want ? tr("Bojler: napenergiából %d °C-ig", "Water heater: up to %d °C from solar")
+                                            : tr("Bojler: vissza %d °C-ra", "Water heater: back to %d °C"), want ? en_cfg.bl_t1 : en_cfg.bl_t0);
+        snprintf(msg, sizeof(msg), tr("Napelem-többlet: %.0f W (határ: %d W).", "Solar surplus: %.0f W (limit: %d W)."),
+                 en_ba_avail, want ? en_cfg.bl_on_w : en_cfg.bl_on_w - EN_BA_HYST_W);
+        nt_push(title, msg, 2, want ? "sunny" : "zzz");
+      }
+    }
+  }
+  // a bojler állapotának igazítása: be, nem Eco, a megfelelő cél-hőfok (egyszerre egy írás)
   if (last_cmd && millis() - last_cmd < EN_BA_RETRY_MS) return;   // az előző írás még nem látszik
+  const int target = en_ba_solar ? en_cfg.bl_t1 : en_cfg.bl_t0;
+  char cmd[EN_BL_CMD_LEN] = "";
+  if (d.boil_sw == 0) strlcpy(cmd, "\"1\":true", sizeof(cmd));
+  else if (strcmp(d.boil_mode, "eco") == 0) strlcpy(cmd, "\"2\":\"" EN_BA_MODE "\"", sizeof(cmd));
+  else if (fabsf(d.boil_set - target) > 0.5f) snprintf(cmd, sizeof(cmd), "\"9\":%d", target);
+  if (!cmd[0]) return;
   last_cmd = millis();
-  en_boiler_cmd(on ? "\"1\":false" : "\"1\":true");
-  logout_printf("Bojler: napelemes automatika: %s (többlet %.0f W)\n", on ? "kikapcsolás" : "bekapcsolás", en_ba_avail);
+  en_boiler_cmd(cmd);
+  logout_printf("Bojler: automatika: írás %s\n", cmd);
+}
+
+// a bojler hibakódja szövegesen ("E2", "E2 E4"; a bitmap 1. bitje E2); üres: nincs hiba
+static void en_bl_fault_text(int f, char *out, size_t n) {
+  out[0] = 0;
+  for (int k = 0; f > 0 && k < 16; k++, f >>= 1)
+    if (f & 1) { char e[6]; snprintf(e, sizeof(e), "%sE%d", out[0] ? " " : "", k + 2); strlcat(out, e, n); }
+}
+
+// A bojler hibakódjának figyelése (másodpercenként): változáskor a Naplóba, és a vezérlő (vagy az egyetlen kijelző)
+// értesítést küld a megjelenéséről és a megszűnéséről. Az első lekérdezés hibáját is jelzi (ha induláskor már hibás).
+static void en_boiler_fault_task(const EnData &d) {
+  static int last = 0;
+  if (!en_fresh(d.bl_ms, EN_BL_STALE_MS) || d.boil_fault < 0 || d.boil_fault == last) return;
+  char now[40], was[40], msg[120];
+  en_bl_fault_text(d.boil_fault, now, sizeof(now));
+  en_bl_fault_text(last, was, sizeof(was));
+  last = d.boil_fault;
+  logout_printf(now[0] ? "Bojler: hibakód %s\n" : "Bojler: a hiba megszűnt (%s)\n", now[0] ? now : was);
+  if (en_bl_remote() || !(cfg.nt_mask & NT_BOIL)) return;
+  if (now[0]) {
+    snprintf(msg, sizeof(msg), tr("A bojler hibát jelez: %s (%.0f °C).", "The water heater reports an error: %s (%.0f °C)."), now, d.boil_temp);
+    nt_push(tr("Bojler hiba", "Water heater error"), msg, 4, "warning");
+  } else {
+    snprintf(msg, sizeof(msg), tr("A bojler hibája (%s) megszűnt.", "The water heater error (%s) has cleared."), was);
+    nt_push(tr("Bojler: a hiba megszűnt", "Water heater: error cleared"), msg, 2, "white_check_mark");
+  }
 }
 
 // A loop()-ból: a háttérfeladat indítása (bekapcsolva, nem bemutató módban) és a hibák változásának naplózása
@@ -919,6 +997,7 @@ static void en_loop() {
   en_day_task(d);
   en_net_task(d);
   en_boiler_auto(d);
+  en_boiler_fault_task(d);
   static uint32_t res_n = 0;
   if (en_bl_res_n != res_n) {   // a háttérfeladat írásainak eredménye
     char r[sizeof(en_bl_res)];
@@ -1000,6 +1079,9 @@ static String en_text() {
       h += b;
       if (!isnan(d.boil_set)) { snprintf(b, sizeof(b), tr(", cél-hőfok: %.0f °C", ", target: %.0f °C"), d.boil_set); h += b; }
       if (d.boil_sw >= 0) h += d.boil_sw ? tr(", bekapcsolva", ", on") : tr(", kikapcsolva", ", off");
+      char fe[40];
+      en_bl_fault_text(d.boil_fault, fe, sizeof(fe));
+      if (fe[0]) { h += tr(" <b style='color:#ff8a80'>hibakód: ", " <b style='color:#ff8a80'>error code: "); h += fe; h += "</b>"; }
       if (!isnan(d.boil_water_pct)) { snprintf(b, sizeof(b), tr(", kivehető melegvíz: %.0f %%", ", hot water available: %.0f%%"), d.boil_water_pct); h += b; }
       if (d.boil_mode[0]) { snprintf(b, sizeof(b), tr(", üzemmód: %s", ", mode: %s"), d.boil_mode); h += b; }
     } else h += tr("még nincs adat", "no data yet");
@@ -1007,13 +1089,16 @@ static String en_text() {
     if (en_bl_remote()) {
       const int au = en_bl_eff_auto(d);
       if (au < 0) snprintf(b, sizeof(b), tr("<br>Bojler automatika: a vezérlő (%s) nem elérhető", "<br>Water heater automation: the controller (%s) is unreachable"), en_cfg.bl_boss);
-      else snprintf(b, sizeof(b), tr("<br>Bojler automatika: %s, %d W (a vezérlő: %s)", "<br>Water heater automation: %s, %d W (controller: %s)"),
-                    au ? tr("be", "on") : tr("ki", "off"), d.rb_on_w, en_cfg.bl_boss);
+      else snprintf(b, sizeof(b), tr("<br>Bojler automatika: %s, %d W, %d/%d °C (a vezérlő: %s)", "<br>Water heater automation: %s, %d W, %d/%d °C (controller: %s)"),
+                    au ? tr("be", "on") : tr("ki", "off"), d.rb_on_w, d.rb_t0, d.rb_t1, en_cfg.bl_boss);
       h += b;
     } else if (en_cfg.bl_auto) {
-      snprintf(b, sizeof(b), tr("<br>Bojler automatika: be (napelem-többlet: %d W felett bekapcsol, %d W alatt ki)",
-                                "<br>Water heater automation: on (solar surplus: switches on above %d W, off below %d W)"),
+      snprintf(b, sizeof(b), tr("<br>Bojler automatika: be (napelemes cél-hőfok %d W többlet felett, alap %d W alatt)",
+                                "<br>Water heater automation: on (solar target above %d W surplus, base below %d W)"),
                en_cfg.bl_on_w, en_cfg.bl_on_w - EN_BA_HYST_W);
+      h += b;
+      snprintf(b, sizeof(b), tr("; cél-hőfok: alap %d °C, napelemes %d °C (most: %s)", "; target: base %d °C, solar %d °C (now: %s)"),
+               en_cfg.bl_t0, en_cfg.bl_t1, en_ba_solar > 0 ? tr("napelemes", "solar") : tr("alap", "base"));
       h += b;
       if (!isnan(en_ba_avail)) { snprintf(b, sizeof(b), tr("; többlet most: %.0f W", "; surplus now: %.0f W"), en_ba_avail); h += b; }
     } else h += tr("<br>Bojler automatika: ki (kézi vezérlés)", "<br>Water heater automation: off (manual control)");
@@ -1144,17 +1229,21 @@ static String en_settings_html() {
   h += "<input type='hidden' name='en_baf' value='1'><label style='display:block'><input type='checkbox' name='en_ba'";
   if (en_cfg.bl_auto) h += " checked";
   h += " style='width:auto;margin:0 8px 0 0'>";
-  h += tr("Napelemes automatika: a kijelző bekapcsolja a bojlert, ha van elég napelem-többlet (a beállított cél-hőfokig fűt), és "
-          "kikapcsolja, ha tartósan nincs</label><label>Bekapcsol ennyi napelem-többletnél (W; kikapcsol " ,
-          "Solar automation: the display switches the water heater on when there is enough solar surplus (it heats up to its "
-          "set target) and off when there is not, for a while</label><label>Switch on at this solar surplus (W; switches off ");
+  h += tr("Napelemes automatika: a bojler mindig be van kapcsolva, az alap cél-hőfokot tartja; ha van elég napelem-többlet, a "
+          "napelemes cél-hőfokig fűt</label><label>Napelemes cél-hőfok ennyi többletnél (W; vissza az alapra " ,
+          "Solar automation: the water heater is always on and keeps the base target; when there is enough solar surplus it "
+          "heats up to the solar target</label><label>Solar target at this surplus (W; back to base ");
   h += String(EN_BA_HYST_W);
   h += tr(" W-tal kevesebbnél)</label>", " W below it)</label>");
   h += "<input name='en_bth' type='number' step='50' min='" + String(EN_BA_MIN_W) + "' max='" + String(EN_BA_MAX_W) + "' value='" + String(en_cfg.bl_on_w);
-  h += tr("'><p style='color:#aaa;margin:0'>Az automatikát csak egy kijelzőn kapcsold be. Bekapcsolva a bojler csak napelemről fűt "
-          "(éjjel és borús időben nincs fűtés). A kijelzőn: Beállítások / Bojler (ott kézzel is kapcsolható).</p>",
-          "'><p style='color:#aaa;margin:0'>Switch the automation on on one display only. When it is on, the heater only heats "
-          "from solar (no heating at night or in cloudy weather). On the display: Settings / Water heater (manual control too).</p>");
+  h += tr("'><label>Alap cél-hőfok (°C)</label>", "'><label>Base target (°C)</label>");
+  h += "<input name='en_bt0' type='number' min='" + String(EN_BA_T_MIN) + "' max='" + String(EN_BA_T_MAX) + "' value='" + String(en_cfg.bl_t0);
+  h += tr("'><label>Napelemes cél-hőfok (°C)</label>", "'><label>Solar target (°C)</label>");
+  h += "<input name='en_bt1' type='number' min='" + String(EN_BA_T_MIN) + "' max='" + String(EN_BA_T_MAX) + "' value='" + String(en_cfg.bl_t1);
+  h += tr("'><p style='color:#aaa;margin:0'>Az automatika a bojlert Azonnali módba teszi (az Eco mód 55 °C-ra korlátoz). A kijelzőn: "
+          "Beállítások / Bojler; a Be/Ki gomb vagy egy üzemmód választása kézi vezérlésre vált.</p>",
+          "'><p style='color:#aaa;margin:0'>The automation puts the heater in Instant mode (Eco limits it to 55 °C). On the display: "
+          "Settings / Water heater; the On/Off button or choosing a mode switches to manual control.</p>");
   return h;
 }
 
@@ -1232,6 +1321,8 @@ static void en_settings_save(WebServer &s) {
     const long w = s.arg("en_bth").toInt();
     if (w >= EN_BA_MIN_W && w <= EN_BA_MAX_W) c.bl_on_w = (int)w;
   }
+  if (s.hasArg("en_bt0")) c.bl_t0 = constrain((int)s.arg("en_bt0").toInt(), EN_BA_T_MIN, EN_BA_T_MAX);
+  if (s.hasArg("en_bt1")) c.bl_t1 = constrain((int)s.arg("en_bt1").toInt(), c.bl_t0, EN_BA_T_MAX);
   {
     CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
     Preferences p;
@@ -1239,6 +1330,8 @@ static void en_settings_save(WebServer &s) {
     p.putBool("en_on", c.on);
     p.putBool("en_ba", c.bl_auto);
     p.putInt("en_bth", c.bl_on_w);
+    p.putInt("en_bt0", c.bl_t0);
+    p.putInt("en_bt1", c.bl_t1);
     p.putString("en_bbo", c.bl_boss);
     p.putString("en_p1", c.p1);
     p.putString("en_sk", c.sk);
