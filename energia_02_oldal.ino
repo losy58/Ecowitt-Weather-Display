@@ -70,7 +70,7 @@ static const lv_point_precise_t EN_PYLON_DROP_R[2] = {{EN_GRID_CX + EN_PY_ARM_HA
 // a ház energiaszínét követi (lila: hálózatról, kék: hálózatról és napelemről is, zöld: csak napelemről).
 constexpr int EN_HC_X = SX(200), EN_HC_W = SX(360);
 constexpr int EN_HC_TOP = EN_GRID_TOP + SY(60), EN_HC_BOTTOM = EN_GRID_BOTTOM;   // a tető magassága 60; az alja a Hálózat doboz aljával egyezik
-constexpr int EN_HC_DIV_Y = EN_HC_TOP + SY(44);   // a napelem termelése alatti válaszvonal: csak annyi hely a tető alatt, amennyi a szövegnek kell
+constexpr int EN_HC_DIV_Y = EN_HC_TOP + SY(38);   // a napelem termelése alatti válaszvonal: csak annyi hely a tető alatt, amennyi a szövegnek kell
 constexpr int EN_ROOF_APEX_X = EN_HC_X + EN_HC_W / 2, EN_ROOF_APEX_Y = EN_GRID_TOP;
 static const lv_point_precise_t EN_ROOF_PTS[3] = {{EN_HC_X, EN_HC_TOP}, {EN_ROOF_APEX_X, EN_ROOF_APEX_Y}, {EN_HC_X + EN_HC_W, EN_HC_TOP}};
 // nap a tető jobb oldalán, az ereszen túl (8 sugár, teljes körben; nem állapotfüggő, mindig besüt)
@@ -79,7 +79,7 @@ constexpr int EN_SUN_D = S(16), EN_SUN_GAP = S(3), EN_SUN_RAY = S(10);
 static lv_point_precise_t en_sun_ray_pts[8][2];   // en_page_create tölti fel (sin/cos kell, nem constexpr)
 
 constexpr int EN_HOUSE_TXT_X = EN_HC_X + SX(15), EN_HOUSE_TXT_W = SX(190);
-constexpr int EN_BOIL_W = SX(150), EN_BOIL_H = SY(96), EN_BOIL_X = EN_HC_X + EN_HC_W - SX(15) - EN_BOIL_W, EN_BOIL_Y = EN_HC_DIV_Y + SY(10);
+constexpr int EN_BOIL_W = SX(150), EN_BOIL_H = SY(110), EN_BOIL_X = EN_HC_X + EN_HC_W - SX(15) - EN_BOIL_W, EN_BOIL_Y = EN_HC_DIV_Y + SY(10);
 
 // a hálózat-ház áramlás (a vonal mindig a Hálózat doboz jobb szélétől a kártya bal széléig fut, a doboz
 // magasságának közepén); exportnál megfordul (zöld, EnFlow::rev), vételnél lila. A napelem mindig a házba folyik,
@@ -267,8 +267,8 @@ static void en_page_create() {
     const int iw = EN_BOIL_W - S(8);
     lv_obj_t *bt = en_one_line(dlabel_c(en_boil_box, tr("Boyler", "Water heater"), sm, COL_GREY, 0, S(4), iw), iw, S(16));
     en_boil_val = en_one_line(dlabel_c(en_boil_box, "--", hu, COL_TEXT, 0, S(20), iw), iw, S(30));
-    en_boil_sub = en_one_line(dlabel_c(en_boil_box, "", sm, COL_GREY, 0, S(52), iw), iw, S(18));
-    en_boil_w   = en_one_line(dlabel_c(en_boil_box, "", sm, COL_GREY, 0, S(72), iw), iw, S(18));
+    en_boil_sub = en_one_line(dlabel_c(en_boil_box, "", sm, COL_GREY, 0, S(52), iw), iw, S(16));
+    en_boil_w   = en_one_line(dlabel_c(en_boil_box, "", hu, COL_TEXT, 0, S(70), iw), iw, S(30));   // a felvett teljesítmény: a hőfokkal egyező méretben
     lv_obj_set_style_pad_hor(bt, S(4), 0);
     lv_obj_set_style_pad_hor(en_boil_sub, S(4), 0);
     lv_obj_set_style_pad_hor(en_boil_w, S(4), 0);
@@ -609,8 +609,12 @@ static void en_page_update() {
     if (sk) snprintf(wb, sizeof(wb), "%.0f W", d.boil_w);
   } else if (sk) snprintf(v, sizeof(v), "%.0f W", d.boil_w);
   else strlcpy(v, "--", sizeof(v));
-  en_box_set(en_boil_box, en_boil_val, en_boil_sub, v, sub, heating ? EN_COL_BOIL : EN_COL_GREEN, bl || sk);
-  if (en_boil_w) set_label_if_changed(en_boil_w, wb);
+  const uint32_t boil_col = heating ? EN_COL_BOIL : EN_COL_GREEN;
+  en_box_set(en_boil_box, en_boil_val, en_boil_sub, v, sub, boil_col, bl || sk);
+  if (en_boil_w) {
+    set_label_if_changed(en_boil_w, wb);
+    lv_obj_set_style_text_color(en_boil_w, lv_color_hex(wb[0] ? boil_col : COL_GREY), 0);
+  }
 
   // áramlás: a hálózat és a ház közt egyetlen vonal viszi a vételt (lila, hálózat -> ház) vagy a visszatáplálást
   // (zöld, ház -> hálózat, megfordított pöttyök); a napelem mindig a házba folyik, a boyler a házban van - ezekhez
