@@ -90,7 +90,8 @@ Photos of the display in demo mode (made-up data, English interface).
   received data to another one (up to 3 hops in a chain).
 - **Screenshot:** `http://<display>/screenshot` returns the current screen as a BMP; `?oldal=energia` (or `fooldal`,
   `elorejelzes`, `kint`, `bent`, `reszletes`, `naplo`) switches to that page first; `&szoba=bedroom` (the room's name, accents
-  optional, or its number: 1..3) sets the room on the dashboard's indoor card. It freezes the display for a few seconds.
+  optional, or its number: 1..3) sets the room on the dashboard's indoor card; `&bojler=1` opens the water heater tab. It
+  freezes the display for a few seconds.
 
 **P4 only:** the board's RTC (RX8025T with coin cell) keeps time without WiFi; the Li battery voltage is shown and a
 notification is sent on power loss; a sound alert when "ventilate" appears (on/off, volume; silent during the night

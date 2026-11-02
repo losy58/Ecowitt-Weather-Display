@@ -89,7 +89,8 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
   továbbküldheti egy másiknak (láncban legfeljebb 3 lépésig).
 - **Képernyőkép:** a `http://<kijelző>/screenshot` a mostani képernyőt adja BMP-ben; az `?oldal=energia` (vagy `fooldal`,
   `elorejelzes`, `kint`, `bent`, `reszletes`, `naplo`) előbb átvált arra az oldalra; a `&szoba=haloszoba` (a helyiség neve,
-  ékezet nélkül is, vagy sorszáma: 1..3) a főoldal „Bent” kártyáját állítja. A kijelző pár másodpercre megáll.
+  ékezet nélkül is, vagy sorszáma: 1..3) a főoldal „Bent” kártyáját állítja; a `&bojler=1` a Bojler fület nyitja meg. A
+  kijelző pár másodpercre megáll.
 
 **Csak a P4-en:** a lap saját órája (RX8025T, gombelemmel) WiFi nélkül is pontos időt ad; a Li-akku feszültsége
 látszik, és áramszünetről értesítést küld; hangjelzés, amikor megjelenik a „Szellőztess” (be/ki, hangerő; az éjszakai
