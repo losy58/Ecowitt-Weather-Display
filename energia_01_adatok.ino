@@ -2,7 +2,7 @@
 // - hálózat (P1) és bojler (dugalj): helyi HTTP, Local API v1 (a HomeWizard appban kell bekapcsolni), 2 mp-enként
 // - napelem: a Growatt OpenAPI (HTTPS, token a fejlécben), 5 percenként (a felhő ennél sűrűbben úgysem frissül)
 // - a ház fogyasztása = napelem + hálózat (becslés, mert a napelem adata akár 5 perces)
-// A beállítások (be/ki, címek, token) a webes kezelőoldalon, NVS "cfg" (en_on, en_p1, en_sk, en_gt, en_gs); alapból ki.
+// A beállítások (be/ki, címek, token) a webes kezelőoldalon, NVS "cfg" (en_on, en_p1, en_sk, en_gt, en_gs, en_gsl); alapból ki.
 // A token és a címek nem kerülhetnek a kódba (a tároló nyilvános).
 // (Az idojaras.ino része: az Arduino IDE és a PlatformIO a fájlokat ábécésorrendben, egy programmá fűzi össze. Ez a fájl
 // közvetlenül az idojaras.ino után jön: a későbbi fájlok static függvényeit csak az alábbi előre deklarálással használja.)
@@ -18,6 +18,12 @@ constexpr uint32_t EN_GW_MS = 5UL * 60UL * 1000UL;   // Growatt
 constexpr uint32_t EN_GW_RETRY_MS = 60UL * 1000UL;   // Growatt hiba után
 constexpr uint32_t EN_GW_RATE_MS = 10UL * 60UL * 1000UL;   // Growatt "túl sűrű lekérdezés" (10012) után
 constexpr int EN_GW_ERR_RATE = 10012;                // error_frequently_access (több kijelző ugyanazzal a tokennel)
+// Körforgás (kiesés elleni védelem, a felhasználó kérése): több kijelzőn ugyanaz a token, és felváltva kérdeznek: a kör
+// EN_GW_RING_S, a kijelzők a slotjuk szerint (0, 1, 2) EN_GW_RING_S / 3 eltolással, a pontos (NTP-) idő szerint. Így a tokenre
+// 5 perc 10 mp-enként jut egy kérés (az 5 perc a Growatt határa; a 10 mp ráhagyás), és ha mindegyik továbbküld a többinek
+// (en_fw), mindenki ilyen gyakran kap friss adatot. Ha egy kijelző kiesik, a többi tovább kérdez (akkor ott 10 perces a rés).
+constexpr uint32_t EN_GW_RING_S = 930, EN_GW_SLOT_WIN_S = 120;   // a kör hossza; a slot kezdete után ennyi ideig még indulhat
+constexpr int EN_GW_SLOTS = 3;
 constexpr uint32_t EN_BL_MS = 30000, EN_BL_RETRY_MS = 60000;   // bojler Tuya-hőfok: 30 mp-enként, hiba után 1 perc
 constexpr uint32_t EN_BL_STALE_MS = 90000;
 constexpr uint32_t EN_BL_AFTER_CMD_MS = 1500;          // írás után ennyivel kérdezzük le újra
@@ -690,7 +696,7 @@ static void handle_energia_post() {
 
 // A háttérfeladat: egyszer indul (verem a PSRAM-ban), és amíg be van kapcsolva, a saját ütemében kérdez
 static void en_worker(void *) {
-  uint32_t next_local = 0, next_bl = 0, next_rb = 0;
+  uint32_t next_local = 0, next_bl = 0, next_rb = 0, gw_cycle = UINT32_MAX;
   uint32_t next_gw = millis() + esp_random() % 30000;   // induláskor szétszórva (több kijelző ugyanazzal a tokennel)
   for (;;) {
     EnCfg c;
@@ -733,7 +739,17 @@ static void en_worker(void *) {
         next_bl = t0 + (ok ? EN_BL_MS : EN_BL_RETRY_MS);
       }
     }
-    if (c.gt[0] && (force || (int32_t)(millis() - next_gw) >= 0)) {
+    if (c.gt[0] && c.gw_slot >= 0) {   // körforgás: csak a saját slotunkban, körönként egyszer
+      const time_t now = time(NULL);
+      if (now > 1700000000) {   // csak pontos idővel (a slot az óra szerint)
+        const uint32_t t = (uint32_t)now - (uint32_t)c.gw_slot * (EN_GW_RING_S / EN_GW_SLOTS);
+        const uint32_t cycle = t / EN_GW_RING_S;
+        if (t % EN_GW_RING_S < EN_GW_SLOT_WIN_S && cycle != gw_cycle) {
+          gw_cycle = cycle;
+          if (en_fetch_growatt(c)) en_fw_send(c);
+        }
+      }
+    } else if (c.gt[0] && (force || (int32_t)(millis() - next_gw) >= 0)) {
       const bool ok = en_fetch_growatt(c);
       next_gw = millis() + (ok ? EN_GW_MS : en_gw_code == EN_GW_ERR_RATE ? EN_GW_RATE_MS : EN_GW_RETRY_MS);
       if (ok) en_fw_send(c);
@@ -753,6 +769,7 @@ static void en_cfg_load() {
   strlcpy(c.sk, pref_str(p, "en_sk", "").c_str(), sizeof(c.sk));
   strlcpy(c.gt, pref_str(p, "en_gt", "").c_str(), sizeof(c.gt));
   strlcpy(c.gs, pref_str(p, "en_gs", "").c_str(), sizeof(c.gs));
+  c.gw_slot = p.isKey("en_gsl") ? (int8_t)constrain(p.getChar("en_gsl", -1), -1, EN_GW_SLOTS - 1) : -1;
   c.kwp = pref_flt(p, "en_kwp", 0.0f);
   strlcpy(c.fw, pref_str(p, "en_fw", "").c_str(), sizeof(c.fw));
   strlcpy(c.bl, pref_str(p, "en_bl", "").c_str(), sizeof(c.bl));
@@ -1013,6 +1030,10 @@ static String en_text() {
     if (d.gw_remote) h += tr(" (másik kijelzőtől)", " (from another display)");
   } else h += tr("még nincs adat", "no data yet");
   if (en_cfg.gt[0] && d.gw_err[0]) { h += " <span style='color:#ff8a80'>"; h += html_attr(d.gw_err); h += "</span>"; }
+  if (en_cfg.gt[0] && en_cfg.gw_slot >= 0) {
+    snprintf(b, sizeof(b), tr(" (lekérés körben, %d. kijelzőként)", " (requests in turn, as display %d)"), en_cfg.gw_slot + 1);
+    h += b;
+  }
   if (en_day.since > 0 && en_day.key >= 0) {
     snprintf(b, sizeof(b), tr("<br>A mai értékek %02d:%02d óta (az első indulás ma).", "<br>Today's values since %02d:%02d (first start today)."),
              (int)(en_day.since / 60), (int)(en_day.since % 60));
@@ -1063,8 +1084,25 @@ static String en_settings_html() {
   h += tr("Mentett token törlése</label><label>Growatt szerver (üresen: " EN_GW_DEFAULT ")</label>",
           "Delete the saved token</label><label>Growatt server (empty: " EN_GW_DEFAULT ")</label>");
   h += "<input name='en_gs' maxlength='64' pattern='[A-Za-z0-9.-]*' value='"; h += html_attr(en_cfg.gs);
-  h += tr("'><label>A napelemek teljesítménye, kWp (a napi diagram teteje; üresen: a mai termeléshez igazodik)</label>",
-          "'><label>Solar panel power, kWp (top of the daily chart; empty: follows today's production)</label>");
+  h += tr("'><label>Growatt-lekérés (ha több kijelzőn is van token)</label>", "'><label>Growatt requests (if several displays have the token)</label>");
+  h += "<select name='en_gsl'>";
+  {
+    static const char *const SL[2][4] = {{"Egyedül: 5 percenként", "Körben, 1. kijelzőként (0:00)", "Körben, 2. kijelzőként (5:10)", "Körben, 3. kijelzőként (10:20)"},
+                                         {"Alone: every 5 minutes", "In turn, as display 1 (0:00)", "In turn, as display 2 (5:10)", "In turn, as display 3 (10:20)"}};
+    for (int k = -1; k < EN_GW_SLOTS; k++) {
+      h += "<option value='" + String(k) + "'";
+      if (k == en_cfg.gw_slot) h += " selected";
+      h += ">"; h += TR2(SL)[k + 1]; h += "</option>";
+    }
+  }
+  h += tr("</select><p style='color:#aaa;margin:0'>Körben: a kijelzők felváltva kérdeznek (mindegyik 15,5 percenként, egymáshoz képest 5 perc "
+          "10 mp eltolással), és a továbbküldéssel egymásnak adják az adatot; ha egy kiesik, a többi pótolja. Mindegyiken ugyanaz a token, "
+          "más-más sorszám, és a továbbküldés címei a másik kijelzők.</p><label>",
+          "</select><p style='color:#aaa;margin:0'>In turn: the displays take turns (each every 15.5 minutes, 5 min 10 s apart) and pass the "
+          "data to each other by forwarding; if one drops out, the others cover. Same token on each, a different number, and the forwarding "
+          "addresses are the other displays.</p><label>");
+  h += tr("A napelemek teljesítménye, kWp (a napi diagram teteje; üresen: a mai termeléshez igazodik)</label>",
+          "Solar panel power, kWp (top of the daily chart; empty: follows today's production)</label>");
   h += "<input name='en_kwp' type='number' step='0.1' min='0' max='1000' value='";
   if (en_cfg.kwp > 0) h += String(en_cfg.kwp, 1);
   h += tr("'><label>Napelem-adat továbbküldése másik kijelzőre (címek vesszővel)</label>",
@@ -1140,6 +1178,7 @@ static void en_settings_save(WebServer &s) {
   en_host_arg(s, "en_p1", c.p1, sizeof(c.p1));
   en_host_arg(s, "en_sk", c.sk, sizeof(c.sk));
   en_host_arg(s, "en_gs", c.gs, sizeof(c.gs));
+  if (s.hasArg("en_gsl")) c.gw_slot = (int8_t)constrain((int)s.arg("en_gsl").toInt(), -1, EN_GW_SLOTS - 1);
   if (s.hasArg("en_kwp")) {
     String k = s.arg("en_kwp");
     k.trim(); k.replace(',', '.');
@@ -1205,6 +1244,7 @@ static void en_settings_save(WebServer &s) {
     p.putString("en_sk", c.sk);
     p.putString("en_gt", c.gt);
     p.putString("en_gs", c.gs);
+    p.putChar("en_gsl", c.gw_slot);
     p.putFloat("en_kwp", c.kwp);
     p.putString("en_fw", c.fw);
     p.putString("en_bl", c.bl);

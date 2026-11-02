@@ -161,6 +161,12 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   be kell kapcsolni: `/api/v1/data`), a Growatt 5 percenként EGY kéréssel (`/v1/plant/data?plant_id=…`: pillanatnyi teljesítmény
   kW-ban, napi / havi / éves termelés; az erőmű azonosítóját csak egyszer, a `/v1/plant/list`-ből kérjük). A JSON-t könyvtár nélkül
   dolgozzuk fel (`en_json_*`; a Growatt a számokat gyakran szövegként adja).
+- **Growatt körforgás (v1.9.0, 2026.11.02., a felhasználó kérése, kiesés elleni védelem):** webes Beállítások „Growatt-lekérés”
+  (NVS `cfg`/`en_gsl`): „Egyedül” (-1, a régi 5 perces mód) vagy „Körben, 1./2./3. kijelzőként” (0..2). Körben mindhárom
+  kijelzőn ugyanaz a token, és a pontos (NTP-) idő szerint felváltva kérdeznek: a kör `EN_GW_RING_S` = 930 mp (15,5 perc), a
+  slotok 0 / 310 / 620 mp-nél (a tokenre 5 perc 10 mp-enként jut kérés: az 5 perc a Growatt határa, 10 mp ráhagyás), a slot
+  kezdete után 2 percig indulhat, körönként egyszer. Mindegyik továbbküld a másik kettőnek (`en_fw`), így mindenki 5 percenként
+  kap friss adatot; ha egy kiesik, a többi pótolja. Beállítás: P4 = 1., `idojaras.local` = 2., `192.168.0.113` = 3.
 - **Growatt 10012 („error_frequently_access”):** a Growatt a sűrű lekérdezést elutasítja, és ugyanaz a token több kijelzőn
   egymást is kiüti. Ezért a tokent csak EGY kijelzőn szabad megadni; az továbbküldi a napelem-adatot (`en_fw`: HTTP POST a cél
   `/energia` címére, `en_fw_send()`), a többi fogadja (`handle_energia_post()`, `EnData::gw_remote`). 10012 után 10 percet vár, az

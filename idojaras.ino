@@ -317,6 +317,7 @@ struct EnCfg {
   char bl[65], bl_id[32], bl_key[20];   // bojler: Tuya-hálózat (helyi, titkosított), a hőfokhoz és az állapothoz
   bool bl_auto; int bl_on_w;            // bojler napelemes automatika: be/ki, ennyi W napelem-többletnél kapcsol be
   char bl_boss[65];                     // a bojler vezérlője (főnök) másik kijelző: ennek címe; üres: ez a kijelző vezérel
+  int8_t gw_slot;                       // Growatt-lekérés: -1 egyedül (5 percenként), 0..2: körben (EN_GW_RING_S), ennyiedik kijelzőként
 };   // fw: ide küldi tovább a napelem-adatot (címek vesszővel)
 struct EnData {
   uint32_t p1_ms; float grid_w, u[3], i[3], imp_kwh, exp_kwh; int tariff;
