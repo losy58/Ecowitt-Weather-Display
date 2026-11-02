@@ -1,5 +1,6 @@
 // Beállítások képernyő (a főoldal jobb felső sarkában a fogaskerékkel nyílik): éjszakai mód, hely (számbillentyűzet),
-// időzóna, WiFi (beállító portál) és rendszer (adatok, újraindítás). A változások bezáráskor kerülnek az NVS-be,
+// időzóna, WiFi (beállító portál), rendszer (adatok, újraindítás) és bojler (kézi vezérlés, napelemes automatika; az Energia
+// oldal Bojler dobozára koppintva is ez nyílik). A bojler parancsai azonnal mennek (a cél-hőfok a koppintások után 1,5 mp-cel). A változások bezáráskor kerülnek az NVS-be,
 // ugyanoda, ahova a webes kezelőoldal ment.
 // (Az idojaras.ino része: az Arduino IDE és a PlatformIO a fájlokat ábécésorrendben, egy programmá fűzi össze.)
 
@@ -13,14 +14,20 @@ constexpr int ST_FW = SX(320), ST_FH = SY(84), ST_FGAP = SY(26);     // a hely m
 constexpr int ST_CF_X = SX(262), ST_CF_Y = SY(170), ST_CF_W = SX(500), ST_CF_H = SY(250);    // megerősítő ablak
 constexpr int ST_ACT_W = SX(380);     // a WiFi / Újraindítás gomb szélessége
 constexpr uint32_t ST_IDLE_MS = 120000;            // ennyi tétlenség után bezárul (és ment)
-enum { ST_T_NIGHT, ST_T_LOC, ST_T_TZ, ST_T_WIFI, ST_T_SYS, ST_T_COUNT };
+enum { ST_T_NIGHT, ST_T_LOC, ST_T_TZ, ST_T_WIFI, ST_T_SYS, ST_T_BOIL, ST_T_COUNT };
 enum { ST_A_NONE, ST_A_FORGET, ST_A_RESTART, ST_A_LANG, ST_A_DEMO };
 constexpr int ST_LANG_X = ST_CX + ST_ACT_W + SX(20), ST_LANG_W = SX(330);
 constexpr int ST_TZB_W = SX(110), ST_TZB_H = SY(70), ST_TZR_X = ST_CX + SX(620);   // időzóna: lapozó gombok
 constexpr int ST_WIFI_Y = SY(300), ST_SYS_Y = SY(440), ST_TXT_W = SX(730), ST_DEMO_Y = SY(360);   // ST_DEMO_Y: a Bemutató gomb (Rendszer fül)          // a WiFi / Rendszer fül gombjai, a szövegek szélessége
 constexpr int ST_CF_BX = SX(40), ST_CF_BY = ST_CF_H - SY(90), ST_CF_BW = SX(180);  // a megerősítő ablak gombjai (az ablakon belül)   // a nyelvváltó gomb (Rendszer fül)
-static const char *const ST_TAB_NAME_T[2][ST_T_COUNT] = {{"Éjszaka", "Hely", "Időzóna", "WiFi", "Rendszer"},
-                                                         {"Night", "Location", "Time zone", "WiFi", "System"}};
+static const char *const ST_TAB_NAME_T[2][ST_T_COUNT] = {{"Éjszaka", "Hely", "Időzóna", "WiFi", "Rendszer", "Bojler"},
+                                                         {"Night", "Location", "Time zone", "WiFi", "System", "Water heater"}};
+// a Bojler fül: két sor állapot, alatta öt sor (be/ki, üzemmód, cél-hőfok, automatika, bekapcsolási többlet)
+constexpr int ST_BL_INFO_Y = SY(88), ST_BL_SUB_Y = SY(126), ST_BL_ROW0 = SY(176), ST_BL_ROW_H = SY(76);
+constexpr int ST_BL_MODE_W = SX(176), ST_BL_MODE_GAP = SX(8);
+constexpr int ST_BL_SET_MIN = 30, ST_BL_SET_MAX = 75, ST_BA_STEP_W = 250;
+constexpr uint32_t ST_BL_SET_DELAY_MS = 1500;   // a cél-hőfok az utolsó koppintás után ennyivel megy el
+enum { ST_BL_R_SW, ST_BL_R_MODE, ST_BL_R_SET, ST_BL_R_AUTO, ST_BL_R_TH, ST_BL_R_COUNT };
 #define ST_TAB_NAME TR2(ST_TAB_NAME_T)
 static const char *ST_KEYS[16] = {"7", "8", "9", LV_SYMBOL_BACKSPACE, "4", "5", "6", "-", "1", "2", "3", ".", "0", "C", "", ""};
 
@@ -37,6 +44,11 @@ static char st_tz[64] = "";
 static lv_obj_t *st_tz_name = NULL, *st_tz_posix = NULL, *st_wifi_info = NULL, *st_sys_info = NULL;
 static lv_obj_t *st_snd = NULL, *st_snd_l = NULL;   // P4: hangjelzés be/ki (Rendszer fül)
 static lv_obj_t *st_cf = NULL, *st_cf_txt = NULL, *st_cf_yes = NULL, *st_cf_no = NULL;   // megerősítő ablak (gombfeliratok)
+static lv_obj_t *st_bl_info = NULL, *st_bl_sub = NULL, *st_bl_lbl[ST_BL_R_COUNT] = {};
+static lv_obj_t *st_bl_sw = NULL, *st_bl_sw_l = NULL, *st_ba = NULL, *st_ba_l = NULL, *st_bl_mode[EN_BL_MODES] = {};
+static int st_bl_set = -1;            // a még el nem küldött cél-hőfok (-1: nincs)
+static uint32_t st_bl_set_ms = 0;
+static bool st_bl_dirty = false;      // az automatika beállítása változott (bezáráskor mentjük)
 
 static int st_tz_count() { return (int)(sizeof(TZ_LIST) / sizeof(TZ_LIST[0])); }
 
@@ -94,6 +106,56 @@ static void st_refresh() {
   else                set_label_if_changed(st_tz_name, tr("Egyéni időzóna (a kezelőoldalon beállítva)", "Custom time zone (set on the web page)"));
   snprintf(b, sizeof(b), "POSIX: %s", st_tz);
   set_label_if_changed(st_tz_posix, b);
+  st_refresh_boil();
+}
+
+// a bojler Tuyán elérhető-e (enélkül a gombok nem csinálnak semmit)
+static bool st_bl_ready(const EnData &d) {
+  return en_cfg.on && !g_demo && en_cfg.bl[0] && en_cfg.bl_id[0] && en_cfg.bl_key[0] && en_fresh(d.bl_ms, EN_BL_STALE_MS);
+}
+
+// a Bojler fül (másodpercenként és koppintáskor)
+static void st_refresh_boil() {
+  if (!st_bl_info) return;
+  const EnData d = en_snapshot();
+  const bool ok = st_bl_ready(d);
+  char b[200];
+  if (ok) {
+    snprintf(b, sizeof(b), tr("Most: %.0f °C", "Now: %.0f °C"), d.boil_temp);
+    const char *st = strcmp(d.boil_state, "heating") == 0 ? tr("fűt", "heating") : strcmp(d.boil_state, "warm") == 0 ? tr("tartja", "keeping warm")
+                   : strcmp(d.boil_state, "standby") == 0 ? tr("készenlét", "standby") : d.boil_state;
+    if (st[0]) { strlcat(b, ", ", sizeof(b)); strlcat(b, st, sizeof(b)); }
+    if (!isnan(d.boil_water_pct)) { char t[40]; snprintf(t, sizeof(t), tr(", %.0f%% melegvíz", ", %.0f%% hot water"), d.boil_water_pct); strlcat(b, t, sizeof(b)); }
+  } else if (!en_cfg.on || g_demo || !en_cfg.bl[0] || !en_cfg.bl_id[0] || !en_cfg.bl_key[0]) {
+    strlcpy(b, tr("A bojler nincs beállítva", "The water heater is not set up"), sizeof(b));
+  } else strlcpy(b, tr("Nincs adat a bojlertől", "No data from the water heater"), sizeof(b));
+  set_label_if_changed(st_bl_info, b);
+  lv_obj_set_style_text_color(st_bl_info, lv_color_hex(ok ? COL_TEXT : COL_WARN), 0);
+
+  if (!ok && (!en_cfg.on || g_demo || !en_cfg.bl[0] || !en_cfg.bl_id[0] || !en_cfg.bl_key[0]))
+    strlcpy(b, tr("A webes kezelőoldalon: Beállítások / Energia (be) és Bojler hőfoka (Tuya): cím, eszköz-ID, helyi kulcs.",
+                  "On the web page: Settings / Energy (on) and Water heater temperature (Tuya): address, device ID, local key."), sizeof(b));
+  else if (d.bl_err[0]) snprintf(b, sizeof(b), tr("Hiba: %s", "Error: %s"), d.bl_err);
+  else if (!isnan(en_ba_avail)) snprintf(b, sizeof(b), tr("Napelem-többlet most: %.0f W (visszatáplálás + a bojler fogyasztása)",
+                                                          "Solar surplus now: %.0f W (export + the heater's own use)"), en_ba_avail);
+  else strlcpy(b, tr("Napelem-többlet: nincs hálózati adat (P1)", "Solar surplus: no grid data (P1)"), sizeof(b));
+  set_label_if_changed(st_bl_sub, b);
+  lv_obj_set_style_text_color(st_bl_sub, lv_color_hex(d.bl_err[0] ? COL_WARN : COL_GREY), 0);
+
+  const bool on = ok && d.boil_sw == 1;
+  set_label_if_changed(st_bl_lbl[ST_BL_R_SW], en_cfg.bl_auto ? tr("Bojler (automatika vezérli)", "Heater (automation in control)") : tr("Bojler (kézi)", "Heater (manual)"));
+  set_label_if_changed(st_bl_sw_l, !ok || d.boil_sw < 0 ? "--" : on ? tr("Be", "On") : tr("Ki", "Off"));
+  lv_obj_set_style_bg_color(st_bl_sw, lv_color_hex(on ? 0x2E7D32 : 0x555555), 0);
+  const int mi = ok ? en_bl_mode_idx(d.boil_mode) : -1;
+  for (int i = 0; i < EN_BL_MODES; i++) lv_obj_set_style_bg_color(st_bl_mode[i], lv_color_hex(i == mi ? 0x5A4A10 : 0x3A3A3A), 0);
+  const int set = st_bl_set >= 0 ? st_bl_set : (ok && !isnan(d.boil_set) ? (int)lroundf(d.boil_set) : -1);
+  if (set >= 0) snprintf(b, sizeof(b), tr("Cél-hőfok: %d °C%s", "Target: %d °C%s"), set, mi == 1 ? tr(" (Eco: max. 55)", " (Eco: max. 55)") : "");
+  else strlcpy(b, tr("Cél-hőfok: --", "Target: --"), sizeof(b));
+  set_label_if_changed(st_bl_lbl[ST_BL_R_SET], b);
+  set_label_if_changed(st_ba_l, en_cfg.bl_auto ? tr("Be", "On") : tr("Ki", "Off"));
+  lv_obj_set_style_bg_color(st_ba, lv_color_hex(en_cfg.bl_auto ? 0x2E7D32 : 0x555555), 0);
+  snprintf(b, sizeof(b), tr("Bekapcsol: %d W többletnél", "On at: %d W surplus"), en_cfg.bl_on_w);
+  set_label_if_changed(st_bl_lbl[ST_BL_R_TH], b);
 }
 
 // a WiFi és a Rendszer fül adatai (másodpercenként)
@@ -228,6 +290,31 @@ static void create_settings_screen() {
                 "The web page password and minute-exact times can be set on the web page: http://" MDNS_HOST ".local/"),
           sm, COL_GREY, ST_CX, ST_SYS_Y + SY(80), ST_TXT_W);
 
+  // Bojler: állapot, be/ki, üzemmód, cél-hőfok, napelemes automatika
+  g = st_grp[ST_T_BOIL];
+  st_bl_info = st_text(g, "", hu, COL_TEXT, ST_CX, ST_BL_INFO_Y, ST_TXT_W);
+  st_bl_sub = st_text(g, "", sm, COL_GREY, ST_CX, ST_BL_SUB_Y, ST_TXT_W);
+  for (int r = 0; r < ST_BL_R_COUNT; r++) {
+    const int y = ST_BL_ROW0 + r * ST_BL_ROW_H;
+    if (r == ST_BL_R_MODE) {   // a négy üzemmód egy sorban
+      for (int i = 0; i < EN_BL_MODES; i++)
+        st_bl_mode[i] = bp_button(g, ST_CX + i * (ST_BL_MODE_W + ST_BL_MODE_GAP), y, ST_BL_MODE_W, TR2(EN_BL_MODE_T)[i], 0x3A3A3A, NULL);
+      continue;
+    }
+    st_bl_lbl[r] = dlabel(g, r == ST_BL_R_AUTO ? tr("Napelemes automatika", "Solar automation") : "", hu, COL_TEXT, ST_CX, y + SY(14));
+    if (r == ST_BL_R_SW) st_bl_sw = bp_button(g, ST_BTN_X, y, ST_TOG_W, "", 0x555555, &st_bl_sw_l);
+    else if (r == ST_BL_R_AUTO) st_ba = bp_button(g, ST_BTN_X, y, ST_TOG_W, "", 0x555555, &st_ba_l);
+    else {
+      bp_button(g, ST_BTN_X, y, ST_BTN_W, "-", 0x3A3A3A, NULL);
+      bp_button(g, ST_BTN_X + ST_TOG_W - ST_BTN_W, y, ST_BTN_W, "+", 0x3A3A3A, NULL);
+    }
+  }
+  st_text(g, tr("Automatika: ha a napelem-többlet eléri a megadott értéket (2 percig), bekapcsolja a bojlert, és az a beállított "
+                "cél-hőfokig fűt; ha 500 W-tal kevesebb (5 percig), kikapcsolja. A Be/Ki gomb kézi vezérlésre vált.",
+                "Automation: when the solar surplus reaches the set value (for 2 min) it switches the heater on, which heats up to "
+                "its target; when it is 500 W lower (for 5 min) it switches it off. The On/Off button switches to manual."),
+          sm, COL_GREY, ST_CX, ST_BL_ROW0 + ST_BL_R_COUNT * ST_BL_ROW_H - SY(6), ST_TXT_W);
+
   // megerősítő ablak
   st_cf = make_group(st_ov, 0, 0, LCD_H_RES, LCD_V_RES);
   lv_obj_set_style_bg_color(st_cf, lv_color_hex(0x000000), 0);
@@ -248,7 +335,8 @@ static bool settings_is_open() { return st_ov && !lv_obj_is_hidden(st_ov); }
 static void settings_open() {
   if (!st_ov) create_settings_screen();   // az első megnyitáskor jön létre (az LVGL memóriája véges)
   if (!st_ov) return;
-  st_night_dirty = st_loc_dirty = st_tz_dirty = false;
+  st_night_dirty = st_loc_dirty = st_tz_dirty = st_bl_dirty = false;
+  st_bl_set = -1;
   st_action = ST_A_NONE;
   st_field = 0;
   if (cfg.has_loc) {
@@ -267,10 +355,25 @@ static void settings_open() {
   lv_obj_set_hidden(st_ov, false);
 }
 
+// a még el nem küldött cél-hőfok elküldése
+static void st_bl_set_flush() {
+  if (st_bl_set < 0) return;
+  char cmd[24];
+  snprintf(cmd, sizeof(cmd), "\"9\":%d", st_bl_set);
+  en_boiler_cmd(cmd);
+  logout_printf("Bojler: cél-hőfok %d °C (a kijelzőn)\n", st_bl_set);
+  st_bl_set = -1;
+}
+
 static void settings_close() {
   if (!settings_is_open()) return;
   lv_obj_set_hidden(st_ov, true);
   bl_preview_until = 0;
+  st_bl_set_flush();
+  if (st_bl_dirty) {
+    en_bl_auto_save();
+    logout_printf("Bojler automatika: %s, %d W (a kijelzőn)\n", en_cfg.bl_auto ? "be" : "ki", en_cfg.bl_on_w);
+  }
   if (st_night_dirty) cfg_save_night();
   if (st_tz_dirty) {
     CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
@@ -411,12 +514,48 @@ static void settings_tap(int x, int y) {
         lv_obj_set_hidden(st_cf, false);
       }
       break;
+    case ST_T_BOIL: {
+      const EnData d = en_snapshot();
+      if (!st_bl_ready(d)) break;
+      const int plus_x = ST_BTN_X + ST_TOG_W - ST_BTN_W;
+      auto row = [](int r) { return ST_BL_ROW0 + r * ST_BL_ROW_H; };
+      if (in_rect(x, y, ST_BTN_X, row(ST_BL_R_SW), ST_TOG_W, ST_BTN_H) && d.boil_sw >= 0) {   // kézi be/ki: az automatika kikapcsol
+        en_boiler_cmd(d.boil_sw ? "\"1\":false" : "\"1\":true");
+        logout_printf("Bojler: %s (kézzel, a kijelzőn)\n", d.boil_sw ? "kikapcsolás" : "bekapcsolás");
+        if (en_cfg.bl_auto) { en_bl_auto_set(false, en_cfg.bl_on_w); st_bl_dirty = true; }
+      }
+      for (int i = 0; i < EN_BL_MODES; i++)
+        if (in_rect(x, y, ST_CX + i * (ST_BL_MODE_W + ST_BL_MODE_GAP), row(ST_BL_R_MODE), ST_BL_MODE_W, ST_BTN_H)) {
+          char cmd[32];
+          snprintf(cmd, sizeof(cmd), "\"2\":\"%s\"", EN_BL_MODE_ID[i]);
+          en_boiler_cmd(cmd);
+          logout_printf("Bojler: üzemmód %s (a kijelzőn)\n", EN_BL_MODE_ID[i]);
+        }
+      const int sdir = in_rect(x, y, ST_BTN_X, row(ST_BL_R_SET), ST_BTN_W, ST_BTN_H) ? -1 : in_rect(x, y, plus_x, row(ST_BL_R_SET), ST_BTN_W, ST_BTN_H) ? 1 : 0;
+      if (sdir) {
+        const int cur = st_bl_set >= 0 ? st_bl_set : !isnan(d.boil_set) ? (int)lroundf(d.boil_set) : 55;
+        st_bl_set = constrain(cur + sdir, ST_BL_SET_MIN, ST_BL_SET_MAX);
+        st_bl_set_ms = millis();
+      }
+      if (in_rect(x, y, ST_BTN_X, row(ST_BL_R_AUTO), ST_TOG_W, ST_BTN_H)) { en_bl_auto_set(!en_cfg.bl_auto, en_cfg.bl_on_w); st_bl_dirty = true; }
+      const int tdir = in_rect(x, y, ST_BTN_X, row(ST_BL_R_TH), ST_BTN_W, ST_BTN_H) ? -1 : in_rect(x, y, plus_x, row(ST_BL_R_TH), ST_BTN_W, ST_BTN_H) ? 1 : 0;
+      if (tdir) { en_bl_auto_set(en_cfg.bl_auto, en_cfg.bl_on_w + tdir * ST_BA_STEP_W); st_bl_dirty = true; }
+      break;
+    }
   }
   st_refresh();
+}
+
+// az Energia oldal Bojler dobozára koppintva: a Beállítások a Bojler fülön
+static void settings_open_boiler() {
+  st_cur = ST_T_BOIL;
+  settings_open();
 }
 
 static void settings_task() {
   if (!settings_is_open()) return;
   if (millis() - st_last_ms > ST_IDLE_MS) { st_action = ST_A_NONE; settings_close(); return; }
+  if (st_bl_set >= 0 && millis() - st_bl_set_ms >= ST_BL_SET_DELAY_MS) st_bl_set_flush();
   if ((st_cur == ST_T_WIFI || st_cur == ST_T_SYS) && millis() - st_info_ms >= 1000) { st_info_ms = millis(); st_refresh_info(); }
+  if (st_cur == ST_T_BOIL && millis() - st_info_ms >= 1000) { st_info_ms = millis(); st_refresh_boil(); }
 }

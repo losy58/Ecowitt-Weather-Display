@@ -185,6 +185,10 @@ static void touch_task() {
     en_chart_fs_open();
     return;
   }
+  if (g == GESTURE_TAP && current_page == PAGE_ENERGY && en_boil_hit(last_gx, last_gy)) {   // a Bojler dobozára: a Beállítások Bojler füle
+    settings_open_boiler();
+    return;
+  }
   // az előzményoldalon egy grafikonra koppintva az teljes képernyőn nyílik meg
   if (g == GESTURE_TAP && (current_page == PAGE_HIST || current_page == PAGE_HIST2) &&
       last_gx >= CH_TOG_X - SX(10) && last_gx < CH_TOG_X + CH_TOG_W + SX(10) && last_gy < CH_TOG_Y + CH_TOG_H + SY(10)) {

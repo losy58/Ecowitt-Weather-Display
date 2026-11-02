@@ -46,9 +46,9 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
   havi (400 napos napi összesítő) nézetben; a hőmérséklet-grafikonon a látható időszak kinti minimuma és maximuma
   jelölve; koppintásra teljes képernyőn.
 - **Részletes adatok** és **Napló** oldal (a program eseményei).
-- **Energia** (nem kötelező, alapból ki): HomeWizard P1 mérő (hálózat), HomeWizard Energy Socket (pl. boyler) és
+- **Energia** (nem kötelező, alapból ki): HomeWizard P1 mérő (hálózat), HomeWizard Energy Socket (pl. bojler) és
   Growatt napelem. Energiaáramlás-ábra (a mozgó pöttyök az irányt mutatják: vétel lila, visszatáplálás zöld), a mai vétel /
-  leadás és a boyler fogyasztása, a három fázis feszültsége és árama, és egy 24 órás diagram a termelésről, a saját
+  leadás és a bojler fogyasztása, a három fázis feszültsége és árama, és egy 24 órás diagram a termelésről, a saját
   fogyasztásról és a hálózati vételről. A kezelőoldalon állítható; a Growatt-token csak egy kijelzőn kell, az továbbküldi
   a napelem adatát a többinek (a Growatt a sűrű lekérdezést elutasítja).
 - **Több helyiség:** legfeljebb 3 konzol (pl. WS3910, GW3000, WN1821) benti adatai külön; a kinti adat (pl. WS90) az

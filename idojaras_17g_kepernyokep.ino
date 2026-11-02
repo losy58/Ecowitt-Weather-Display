@@ -1,8 +1,9 @@
-// Képernyőkép: GET /screenshot[?oldal=energia][&szoba=haloszoba][&teljes=1] a kezelőoldal jelszavával (ha van); 24 bites
+// Képernyőkép: GET /screenshot[?oldal=energia][&szoba=haloszoba][&teljes=1][&bojler=1] a kezelőoldal jelszavával (ha van); 24 bites
 // BMP az aktív LVGL képernyőről. Az oldal= (név vagy sorszám) előbb átvált a kért oldalra, és az marad megnyitva. A kép
 // egy saját PSRAM-pufferbe készül (az LVGL memóriájából nem foglal nagyot), a főszálban, ezért a kijelző 1-2 másodpercre
 // megáll. A szoba= (a helyiség sorszáma 1..3, neve, ékezet nélkül is, vagy konzol-azonosítója) a főoldal "Bent" kártyáját
 // állítja. A teljes=1 az Energia oldal napi diagramját teljes képernyőn nyitja meg (mint rákoppintva), és az is marad.
+// A bojler=1 a Beállítások Bojler fülét nyitja meg (mint az Energia oldal Bojler dobozára koppintva).
 // (Az idojaras.ino része: az Arduino IDE és a PlatformIO a fájlokat ábécésorrendben, egy programmá fűzi össze.)
 
 // az oldal neve (magyarul vagy angolul) vagy sorszáma -> PAGE_*; -1: ismeretlen
@@ -88,6 +89,7 @@ static void handle_screenshot() {
     show_page(p);
   }
   if (s.hasArg("teljes") && current_page == PAGE_ENERGY) en_chart_fs_open();   // a napi diagram teljes képernyőn (mint rákoppintva)
+  if (s.hasArg("bojler")) settings_open_boiler();   // a Beállítások Bojler füle (mint a Bojler dobozra koppintva; 2 perc múlva bezárul)
   lv_obj_t *scr = lv_screen_active();
   lv_obj_update_layout(scr);
   const int w = lv_obj_get_width(scr), h = lv_obj_get_height(scr);

@@ -151,7 +151,7 @@ a PSRAM-ot használja. Nagy új foglalást PSRAM-ba tegyél (`MALLOC_CAP_SPIRAM`
 
 ## Energia (v1.4.0, 2026.10.22., a felhasználó kérése)
 
-Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mérő (hálózat), egy HomeWizard Energy Socket (boyler)
+Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mérő (hálózat), egy HomeWizard Energy Socket (bojler)
 és egy Growatt napelem adatai. Kód: `energia_01_adatok.ino` (adatok, háttérfeladat, web), `energia_02_oldal.ino` (az oldal).
 - **Beállítások** (webes Beállítások, „Energia” rész): P1 és dugalj címe (`en_p1`, `en_sk`), Growatt-token (`en_gt`, jelszómező, az
   oldal csak a végét mutatja) és -szerver (`en_gs`, alapból `openapi.growatt.com`), a napelemek kWp-je (`en_kwp`, a diagram
@@ -168,7 +168,7 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   A HomeWizard P1 `active_power_w` előjeles (+ vétel, - visszatáplálás); fázisonkénti teljesítményt NEM ad, csak feszültséget és egész
   amperben, előjel nélkül mért áramot, ezért fázisonkénti teljesítményt nem számolunk.
 - **Mai értékek:** a nap eleji mérőállások (`EnDay`, NVS `cfg`/`en_day`, naponta egyszer írva; ha a kijelző napközben indul először, az
-  indulás idejétől számol, ezt kiírja) → mai vétel / leadás / boyler.
+  indulás idejétől számol, ezt kiírja) → mai vétel / leadás / bojler.
 - **Napi diagram:** `/energia.bin` (FFat, `EnPvDay`, magic `ENV2`): 288 db 5 perces szelet, a termelés (W, a felhő időbélyege szerinti
   szeletbe) és a hálózati teljesítmény átlaga (a P1 mintáiból; a szelet végén mentve). Kék = a termelés saját fogyasztásra
   használt része (termelés - leadás), lila = vétel (a kékre rakva), zöld = termelés; hálózati adat nélkül (nem elérhető P1) csak zöld. 0-24 óra; a skála a termelési csúcshoz igazodik
@@ -177,15 +177,15 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   főoldalra, az elemei az első megnyitáskor jönnek létre (LVGL memória). A vételnél a hálózat lila, visszatáplálásnál zöld.
   Bemutató módban nincs lekérés és az oldal sincs a lapozásban (még nincs kitalált energia-adat).
 - **Az áramlás-kép átalakítva (v1.6.0, 2026.11.01., a felhasználó kérése):** a korábbi négy külön kör (Napelem, Hálózat, Ház,
-  Boyler) helyett egy közös kép: a Hálózat egy villanyoszlop (letisztult, X-rácsozott láb, 2 kar) + alatta egy rövidebb doboz
-  (az oszlop ezért karcsúbb), a Napelem+Ház+Boyler pedig egy házikép (nyitott tetővonal, napsugaras nap, a napelem termelése a
-  tetőben, alatta válaszvonal, a Ház szövege és a Boyler kis doboza). A Hálózat és a Ház/Boyler kerete/vonalai dinamikusan az
+  Bojler) helyett egy közös kép: a Hálózat egy villanyoszlop (letisztult, X-rácsozott láb, 2 kar) + alatta egy rövidebb doboz
+  (az oszlop ezért karcsúbb), a Napelem+Ház+Bojler pedig egy házikép (nyitott tetővonal, napsugaras nap, a napelem termelése a
+  tetőben, alatta válaszvonal, a Ház szövege és a Bojler kis doboza). A Hálózat és a Ház/Bojler kerete/vonalai dinamikusan az
   energiahelyzet színét követik (lila vétel, zöld visszatáplálás/napelem, kék mindkét forrás); a tető és a napelem-rész sárga, de
-  csak ha van napelem-adat (`gw`), különben szürke. Nincs külön Napelem→Ház és Ház→Boyler vonal (mindkettő a közös képben van,
+  csak ha van napelem-adat (`gw`), különben szürke. Nincs külön Napelem→Ház és Ház→Bojler vonal (mindkettő a közös képben van,
   "nem kell hozzá vonal/vezeték"), csak a Hálózat↔Ház vonal (irány szerint lila/zöld, megforduló pöttyökkel). A napi diagram
   függőleges tengelye 2 kW-onként van beosztva (`EN_CH_YSTEP`), nem csak 3 ponton. Kód: `energia_02_oldal.ino`.
-- **Boyler hőfoka (Tuya, v1.6.0, 2026.11.01., a felhasználó kérése):** a bojler saját (Tuya) WiFi-modulja a helyi hálózaton, TCP
-  6668-on, Tuya 3.3 protokollal, AES-128-ECB-vel titkosítva adja a hőfokát és az állapotát. Beállítás (webes Beállítások, „Boyler
+- **Bojler hőfoka (Tuya, v1.6.0, 2026.11.01., a felhasználó kérése):** a bojler saját (Tuya) WiFi-modulja a helyi hálózaton, TCP
+  6668-on, Tuya 3.3 protokollal, AES-128-ECB-vel titkosítva adja a hőfokát és az állapotát. Beállítás (webes Beállítások, „Bojler
   hőfoka” rész): a Tuya-hálózat címe (`en_bl`), eszköz-ID (`en_blid`), helyi kulcs (`en_blk`, jelszómező, a Tuya API Explorer →
   Device Management → Query Device Details lekérésből; NEM kerülhet a kódba). Lekérés (`en_fetch_boiler`, `en_worker`, 30
   mp-enként): DP_QUERY (cmd `0x0A`), a kérés/válasz kerete `000055AA` + sorszám(4) + parancs(4) + hossz(4) + titkosított payload +
@@ -198,10 +198,21 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   kivehető melegvíz (%), `20` hibakód (bitmap). Az Anti-bakteriális ciklus (80°C-ra fűt, utána visszaáll az eredeti módra) alatt a
   9-es DP-n nem láttunk 80-at (maradt a korábbi cél-hőfokon) – lehet, hogy a ciklus a DP 9-et nem írja át, a fűtést belsőleg
   vezérli. A fizikai túlmelegedés elleni védelem a bojlerben van, nem szoftveres.
-  **Vezérlés (DP-írás, kipróbálva, még nincs a firmware-ben):** CONTROL paranccsal (cmd `0x07`) lehet írni (pl. cél-hőfok: DP 9),
+  **Vezérlés (DP-írás):** CONTROL paranccsal (cmd `0x07`) lehet írni (pl. cél-hőfok: DP 9),
   de a titkosított payload elé — a DP_QUERY-vel ellentétben — egy 15 bájtos, NEM titkosított fejléc kell: `"3.3"` + 12 nulla bájt,
   utána jön az AES-ECB-vel titkosított JSON (`{"devId","uid","t","dps":{...}}`, `gwId` nem kell). Enélkül a bojler
-  „parse data error”-ral (visszatérési kód 1) utasítja el.
+  „parse data error”-ral (visszatérési kód 1) utasítja el. Kód: `en_tuya_xchg()` (lekérdezés és írás közös), a főszál
+  `en_boiler_cmd()`-dal 4 elemes sorba teszi, az `en_worker` küldi (`en_boiler_control()`), utána 1,5 mp múlva lekérdez.
+- **Bojler a kijelzőn és vezérlése (v1.7.0, 2026.11.02., a felhasználó kérése):** a tető alacsonyabb (42), a Bojler doboza nagyobb
+  (a Ház szövege keskenyebb): hőfok/cél-hőfok (`69/55°C`), üzemmód (vagy „kikapcsolva”), melegvíz %, watt, a jobb felső sarokban
+  kéz (kézi) vagy „A” (napelemes automatika) jel. A kéz a `font_sym_hand.c` (Font Awesome Free „hand”, U+F256; 7B 16, P4 20 px,
+  lv_font_conv `--range 0xF256`). A dobozra koppintva a Beállítások új **Bojler** füle nyílik (`settings_open_boiler()`): Be/Ki
+  (kézi; ha az automatika be volt, kikapcsolja), a 4 üzemmód, cél-hőfok -/+ (30-75, az utolsó koppintás után 1,5 mp-cel küldi),
+  automatika be/ki és a bekapcsolási többlet -/+ (250 W-onként). **Automatika** (`en_boiler_auto()`, a felhasználó kérése szerint csak
+  ennyi): ha a napelem-többlet (= visszatáplálás + a bojler saját fogyasztása) legalább `bl_on_w` (alapból 2000 W) 2 percig,
+  bekapcsolja a bojlert (DP 1), az a saját cél-hőfokáig fűt; ha 500 W-tal kevesebb 5 percig, kikapcsolja. Friss P1- és Tuya-adat
+  nélkül nem kapcsol. NVS `cfg`/`en_ba`, `en_bth` (webes Beállításokban is). Csak EGY kijelzőn legyen bekapcsolva. Képernyőkép a
+  fülről: `/screenshot?bojler=1`.
 - **S3-as 7B: OTA után az újraindítás oka néha `RTCWDT_RTC_RST`** (a szoftveres reset nem fejeződik be, az ESP-IDF tartalék RTC
   watchdogja végzi, kb. 1 mp múlva; a kijelző ártalmatlanul elindul). A `diag_init()` ezt kért újraindításnak jegyzi, ha a program
   maga kért újraindítást (`diag_mark_restart`). A P4-en nem fordult elő; az okát nem találtuk meg (a háttérfeladat leállítása

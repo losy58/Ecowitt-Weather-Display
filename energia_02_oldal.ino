@@ -1,7 +1,7 @@
-// Energia oldal a kijelzőn: bal felül az energiaáramlás (egy képben a napelem+ház+boyler, mellette a Hálózat
+// Energia oldal a kijelzőn: bal felül az energiaáramlás (egy képben a napelem+ház+bojler, mellette a Hálózat
 // villanyoszlopa és doboza; az aktív hálózat-ház vonalon mozgó pöttyök mutatják az irányt), alatta a mai nap diagramja
 // (0-24 óra: a napelem termelése zölden, a ház saját fogyasztása a termelésből kéken, a hálózati vétel lilán, a
-// kéknek egymásra rakva), jobbra az összesítő (termelés, fázisok, mai vétel / visszatáplálás, boyler). Nem ugrik
+// kéknek egymásra rakva), jobbra az összesítő (termelés, fázisok, mai vétel / visszatáplálás, bojler). Nem ugrik
 // vissza magától a főoldalra. Csak bekapcsolt energiánál van a lapozásban (en_page_enabled()); az elemei az első
 // megnyitáskor jönnek létre (az LVGL memóriája véges).
 // (Az idojaras.ino része: az Arduino IDE és a PlatformIO a fájlokat ábécésorrendben, egy programmá fűzi össze. Ez a fájl
@@ -16,12 +16,12 @@ static lv_obj_t *dlabel_r(lv_obj_t *parent, const char *txt, const lv_font_t *fo
 static void set_label_if_changed(lv_obj_t *obj, const char *text);                               // idojaras_03
 static void show_page(int p);                                                                    // idojaras_14
 
-constexpr uint32_t EN_COL_GREEN = 0x7CD67C;        // visszatáplálás / a boyler készenléti állapota
+constexpr uint32_t EN_COL_GREEN = 0x7CD67C;        // visszatáplálás / a bojler készenléti állapota
 constexpr uint32_t EN_COL_NODE = 0x1E1E1E;
 constexpr float EN_FLOW_MIN_W = 20.0f;             // ennél kisebb áramlás: a vonal halvány, nincs pötty
-constexpr float EN_BOIL_HEAT_W = 3.0f;             // ennél nagyobb fogyasztásnál a boyler "fűt" (alatta: készenlét, 2-3 W)
+constexpr float EN_BOIL_HEAT_W = 3.0f;             // ennél nagyobb fogyasztásnál a bojler "fűt" (alatta: készenlét, 2-3 W)
 constexpr uint32_t EN_DOT_MS = 1600;               // egy pötty ennyi idő alatt ér végig a vonalon
-constexpr uint32_t EN_COL_IMP = 0x8A5CF5, EN_COL_BOIL = 0xE54B4B;   // hálózati vétel (lila), boyler fűtés (piros)
+constexpr uint32_t EN_COL_IMP = 0x8A5CF5, EN_COL_BOIL = 0xE54B4B;   // hálózati vétel (lila), bojler fűtés (piros)
 
 // a zónák képernyő-koordinátákban: bal felül az áramlás, alatta a diagram, jobbra az összesítő (teljes magasságban)
 constexpr int EN_ZL_X = SX(20), EN_ZL_W = SX(600), EN_Z_Y = SY(50), EN_Z_H = SY(540), EN_ZL_H = SY(250);
@@ -64,12 +64,12 @@ static const lv_point_precise_t EN_PYLON_ARM_R[2] = {{EN_GRID_CX + EN_PY_ARM_HAL
 static const lv_point_precise_t EN_PYLON_DROP_L[2] = {{EN_GRID_CX - EN_PY_ARM_HALF - EN_GRID_ARM_OUT, EN_PY_ARM_Y}, {EN_GRID_CX - EN_PY_ARM_HALF - EN_GRID_ARM_OUT, EN_PY_ARM_Y + EN_GRID_DROP}};
 static const lv_point_precise_t EN_PYLON_DROP_R[2] = {{EN_GRID_CX + EN_PY_ARM_HALF + EN_GRID_ARM_OUT, EN_PY_ARM_Y}, {EN_GRID_CX + EN_PY_ARM_HALF + EN_GRID_ARM_OUT, EN_PY_ARM_Y + EN_GRID_DROP}};
 
-// ---- Napelem + Ház + Boyler: egy közös kártya a Hálózattól jobbra ----
+// ---- Napelem + Ház + Bojler: egy közös kártya a Hálózattól jobbra ----
 // A tető (nyitott vonal, mindig sárga) és a napelem termelése egy térben van (nincs vonal köztük); alatta egy
-// válaszvonal (a ház energiaszínét követi) választja el a Ház és a Boyler részt. A Ház aljának/oldalainak kerete is
+// válaszvonal (a ház energiaszínét követi) választja el a Ház és a Bojler részt. A Ház aljának/oldalainak kerete is
 // a ház energiaszínét követi (lila: hálózatról, kék: hálózatról és napelemről is, zöld: csak napelemről).
 constexpr int EN_HC_X = SX(200), EN_HC_W = SX(360);
-constexpr int EN_HC_TOP = EN_GRID_TOP + SY(60), EN_HC_BOTTOM = EN_GRID_BOTTOM;   // a tető magassága 60; az alja a Hálózat doboz aljával egyezik
+constexpr int EN_HC_TOP = EN_GRID_TOP + SY(42), EN_HC_BOTTOM = EN_GRID_BOTTOM;   // a tető magassága 42; az alja a Hálózat doboz aljával egyezik
 constexpr int EN_HC_DIV_Y = EN_HC_TOP + SY(38);   // a napelem termelése alatti válaszvonal: csak annyi hely a tető alatt, amennyi a szövegnek kell
 constexpr int EN_ROOF_APEX_X = EN_HC_X + EN_HC_W / 2, EN_ROOF_APEX_Y = EN_GRID_TOP;
 static const lv_point_precise_t EN_ROOF_PTS[3] = {{EN_HC_X, EN_HC_TOP}, {EN_ROOF_APEX_X, EN_ROOF_APEX_Y}, {EN_HC_X + EN_HC_W, EN_HC_TOP}};
@@ -78,23 +78,28 @@ constexpr int EN_SUN_CX = EN_HC_X + EN_HC_W + SX(15), EN_SUN_CY = SY(30);
 constexpr int EN_SUN_D = S(16), EN_SUN_GAP = S(3), EN_SUN_RAY = S(10);
 static lv_point_precise_t en_sun_ray_pts[8][2];   // en_page_create tölti fel (sin/cos kell, nem constexpr)
 
-constexpr int EN_HOUSE_TXT_X = EN_HC_X + SX(15), EN_HOUSE_TXT_W = SX(190);
-constexpr int EN_BOIL_W = SX(150), EN_BOIL_H = SY(110), EN_BOIL_X = EN_HC_X + EN_HC_W - SX(15) - EN_BOIL_W, EN_BOIL_Y = EN_HC_DIV_Y + SY(10);
+constexpr int EN_HOUSE_TXT_X = EN_HC_X + SX(15), EN_HOUSE_TXT_W = SX(135);
+// a Bojler doboza a Ház részben jobbra, szinte a teljes magasságban (hőfok/cél, üzemmód, melegvíz, teljesítmény, kéz/A jel);
+// rákoppintva a Beállítások Bojler füle nyílik
+constexpr int EN_BOIL_W = SX(196), EN_BOIL_X = EN_HC_X + EN_HC_W - SX(12) - EN_BOIL_W, EN_BOIL_Y = EN_HC_DIV_Y + SY(7);
+constexpr int EN_BOIL_H = EN_HC_BOTTOM - SY(7) - EN_BOIL_Y;
+constexpr int EN_BOIL_BADGE = S(24);   // a kéz / "A" jel köre a doboz jobb felső sarkában
 
 // a hálózat-ház áramlás (a vonal mindig a Hálózat doboz jobb szélétől a kártya bal széléig fut, a doboz
 // magasságának közepén); exportnál megfordul (zöld, EnFlow::rev), vételnél lila. A napelem mindig a házba folyik,
-// a boyler a házban van (nincs hozzá külön vonal/vezeték) - ezekhez nincs rajzolt áramlás.
+// a bojler a házban van (nincs hozzá külön vonal/vezeték) - ezekhez nincs rajzolt áramlás.
 enum { EN_F_GRID_HOUSE, EN_F_COUNT };
 constexpr int EN_FLOW_Y = EN_GRID_BOTTOM - EN_GRID_BOX_H / 2;
 constexpr int EN_FLOW_X0 = EN_GRID_CX + EN_GRID_BOX_W / 2, EN_FLOW_X1 = EN_HC_X;
 
-// EnFlow, EN_DOTS: idojaras.ino. A Hálózat és a Boyler doboza egyszerű bordás téglalap (ring+val[+sub]); a Napelem
+// EnFlow, EN_DOTS: idojaras.ino. A Hálózat és a Bojler doboza egyszerű bordás téglalap (ring+val[+sub]); a Napelem
 // és a Ház a kártyában sima szöveg, keret nélkül.
 static lv_obj_t *page_en = NULL;
 static lv_obj_t *en_house_border[4] = {};   // bal-alsó, jobb-alsó, alsó, válaszvonal: a ház energiaszínét követik
 static lv_obj_t *en_grid_lines[12] = {}, *en_grid_dots[2] = {};   // a villanyoszlop elemei: a színük a Hálózat állapotát követi
 static lv_obj_t *en_grid_box = NULL, *en_grid_val = NULL, *en_grid_sub = NULL;
-static lv_obj_t *en_boil_box = NULL, *en_boil_val = NULL, *en_boil_sub = NULL, *en_boil_w = NULL;
+static lv_obj_t *en_boil_box = NULL, *en_boil_val = NULL, *en_boil_sub = NULL, *en_boil_w = NULL, *en_boil_mode = NULL;
+static lv_obj_t *en_boil_badge = NULL, *en_boil_badge_l = NULL;   // kéz: kézi vezérlés, "A": napelemes automatika
 static lv_obj_t *en_pv_val = NULL;
 static lv_obj_t *en_pv_lines[11] = {}, *en_pv_sun = NULL;   // tető, 8 napsugár, 2 oldalvonal + a nap köre: sárga, ha van napelem-adat, egyébként szürke
 static lv_obj_t *en_house_val = NULL, *en_house_sub = NULL;
@@ -211,7 +216,7 @@ static void en_page_create() {
     lv_obj_set_style_pad_hor(gt, S(6), 0); lv_obj_set_style_pad_hor(en_grid_sub, S(6), 0);
   }
 
-  // ---- Napelem + Ház + Boyler kártya ----
+  // ---- Napelem + Ház + Bojler kártya ----
   // A tető, a nap (sugarakkal) és a napelem-rész oldala csak akkor sárga, ha van napelem-adat (en_page_update); addig szürke.
   make_shape(zl, EN_HC_X, EN_HC_TOP, EN_HC_W, EN_HC_BOTTOM - EN_HC_TOP, S(10), EN_COL_NODE);
   {
@@ -260,18 +265,24 @@ static void en_page_create() {
   en_house_sub = en_one_line(dlabel(zl, "", sm, COL_GREY, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(66)), EN_HOUSE_TXT_W, S(20));
   (void)house_title;
 
-  {   // Boyler: kis bordás téglalap a kártyán belül, jobbra lent (nincs hozzá vonal/vezeték - benne van a házban)
+  {   // Bojler: kis bordás téglalap a kártyán belül, jobbra lent (nincs hozzá vonal/vezeték - benne van a házban)
     en_boil_box = make_shape(zl, EN_BOIL_X, EN_BOIL_Y, EN_BOIL_W, EN_BOIL_H, S(8), EN_COL_NODE);
     lv_obj_set_style_border_width(en_boil_box, S(3), 0);
     lv_obj_set_style_border_color(en_boil_box, lv_color_hex(EN_COL_GREEN), 0);
-    const int iw = EN_BOIL_W - S(8);
-    lv_obj_t *bt = en_one_line(dlabel_c(en_boil_box, tr("Boyler", "Water heater"), sm, COL_GREY, 0, S(4), iw), iw, S(16));
-    en_boil_val = en_one_line(dlabel_c(en_boil_box, "--", hu, COL_TEXT, 0, S(20), iw), iw, S(30));
-    en_boil_sub = en_one_line(dlabel_c(en_boil_box, "", sm, COL_GREY, 0, S(52), iw), iw, S(16));
-    en_boil_w   = en_one_line(dlabel_c(en_boil_box, "", hu, COL_TEXT, 0, S(70), iw), iw, S(30));   // a felvett teljesítmény: a hőfokkal egyező méretben
-    lv_obj_set_style_pad_hor(bt, S(4), 0);
-    lv_obj_set_style_pad_hor(en_boil_sub, S(4), 0);
-    lv_obj_set_style_pad_hor(en_boil_w, S(4), 0);
+    const int iw = EN_BOIL_W - S(8), tw = iw - 2 * EN_BOIL_BADGE;   // a cím mindkét oldalon kihagyja a jel helyét (középre zárt)
+    lv_obj_t *bt = en_one_line(dlabel_c(en_boil_box, tr("Bojler", "Water heater"), sm, COL_GREY, EN_BOIL_BADGE, S(4), tw), tw, S(16));
+    en_boil_val  = en_one_line(dlabel_c(en_boil_box, "--", hu, COL_TEXT, 0, S(21), iw), iw, S(30));   // hőfok / cél-hőfok
+    en_boil_mode = en_one_line(dlabel_c(en_boil_box, "", sm, COL_GREY, 0, S(53), iw), iw, S(16));     // üzemmód (vagy "kikapcsolva")
+    en_boil_sub  = en_one_line(dlabel_c(en_boil_box, "", sm, COL_GREY, 0, S(70), iw), iw, S(16));     // kivehető melegvíz
+    en_boil_w    = en_one_line(dlabel_c(en_boil_box, "", hu, COL_TEXT, 0, S(88), iw), iw, S(30));     // a felvett teljesítmény: a hőfokkal egyező méretben
+    for (lv_obj_t *l : {en_boil_mode, en_boil_sub, en_boil_w}) lv_obj_set_style_pad_hor(l, S(4), 0);
+    en_boil_badge = make_shape(en_boil_box, iw - EN_BOIL_BADGE - S(2), S(2), EN_BOIL_BADGE, EN_BOIL_BADGE, LV_RADIUS_CIRCLE, EN_COL_NODE);
+    lv_obj_set_style_border_width(en_boil_badge, S(2), 0);
+    en_boil_badge_l = lv_label_create(en_boil_badge);
+    lv_label_set_text(en_boil_badge_l, "");
+    lv_obj_center(en_boil_badge_l);
+    lv_obj_set_hidden(en_boil_badge, true);
+    (void)bt;
   }
 
   // ---- bal alul: a mai termelés (vászon; csak új adatnál rajzoljuk újra) ----
@@ -280,8 +291,8 @@ static void en_page_create() {
   en_ch_peak = dlabel(zc, "", sm, COL_GREY, SX(80), SY(16));
   lv_obj_set_size(en_ch_peak, SX(190), S(20));
   lv_label_set_long_mode(en_ch_peak, LV_LABEL_LONG_DOT);
-  {   // jelmagyarázat jobbra: termelés, saját fogyasztás, hálózati vétel, boyler
-    static const char *const LEG[2][4] = {{"termelés", "saját", "vétel", "boyler"}, {"solar", "own use", "import", "heater"}};
+  {   // jelmagyarázat jobbra: termelés, saját fogyasztás, hálózati vétel, bojler
+    static const char *const LEG[2][4] = {{"termelés", "saját", "vétel", "bojler"}, {"solar", "own use", "import", "heater"}};
     static const uint32_t LC[4] = {EN_COL_PV, EN_COL_SELF, EN_COL_IMP, EN_COL_BOIL};
     for (int k = 0; k < 4; k++) en_one_line(dlabel_r(zc, LEG[g_lang][k], sm, LC[k], EN_ZL_W - SX(16) - (3 - k) * SX(76), SY(16), SX(70)), SX(70), S(20));
   }
@@ -312,7 +323,7 @@ static void en_page_create() {
   for (int k = 0; k < 3; k++) { en_r_ph[k] = en_one_line(dlabel(zr, "", hu, COL_TEXT, x0, y), lw, EN_ROW); y += EN_ROW; }
   for (int k = 0; k < 2; k++) { en_r_gday[k] = en_one_line(dlabel(zr, "", hu, COL_TEXT, x0, y), lw, EN_ROW); y += EN_ROW; }
   y += SY(14);
-  dlabel(zr, tr("Boyler", "Water heater"), hu, EN_COL_BOIL, x0, y); y += EN_ROW;
+  dlabel(zr, tr("Bojler", "Water heater"), hu, EN_COL_BOIL, x0, y); y += EN_ROW;
   en_r_boil = en_one_line(dlabel(zr, "", hu, COL_TEXT, x0, y), lw, EN_ROW); y += EN_ROW;
   // alul: az adatok kora vagy a hiba (két sor)
   en_r_status = dlabel(zr, "", sm, COL_GREY, x0, EN_Z_H - SY(52));
@@ -320,7 +331,7 @@ static void en_page_create() {
   lv_label_set_long_mode(en_r_status, LV_LABEL_LONG_DOT);
 }
 
-// egy bordás doboz (Hálózat vagy Boyler) értéke és kerete; sub==NULL: nincs alszöveg-mező (pl. a Boylernek)
+// egy bordás doboz (Hálózat vagy Bojler) értéke és kerete; sub==NULL: nincs alszöveg-mező (pl. a Bojlernek)
 static void en_box_set(lv_obj_t *ring, lv_obj_t *val, lv_obj_t *sub, const char *v, const char *s, uint32_t color, bool on) {
   set_label_if_changed(val, v);
   if (sub) set_label_if_changed(sub, s);
@@ -412,7 +423,7 @@ static void en_chart_scale(bool today, int *out_top, int *out_peak, int *out_pea
 static int en_ch_y_of(float w_val, int top, int h) { return h - 1 - (int)lroundf((h - 1) * w_val / top); }
 
 // A mai nap kirajzolása egy vászonba (kis- vagy teljes képernyős): háttér, rácsvonalak (0, 2 kW-onként a "top"-ig;
-// 3 óránként), oszloponként a termelés/saját/vétel (lásd en_ch_split), rajtuk a boyler teljesítményének vékony piros nyoma.
+// 3 óránként), oszloponként a termelés/saját/vétel (lásd en_ch_split), rajtuk a bojler teljesítményének vékony piros nyoma.
 static void en_chart_paint(lv_obj_t *cv, int w, int h, int top, bool today) {
   const lv_color_t bg = lv_color_hex(COL_BG_TL), grid = lv_color_hex(EN_CH_GRID);
   const lv_color_t c_edge = lv_color_hex(EN_COL_PV), c_pv = lv_color_hex(mix_col(COL_BG_TL, EN_COL_PV, 55));
@@ -429,7 +440,7 @@ static void en_chart_paint(lv_obj_t *cv, int w, int h, int top, bool today) {
   }
   if (today) {
     const int lw = S(2);          // a termelés felső szélének vastagsága
-    const int bw = max(S(3), h / 60);   // a boyler-nyom vastagsága
+    const int bw = max(S(3), h / 60);   // a bojler-nyom vastagsága
     const float k = (float)(h - 1) / top;
     for (int x = 0; x < w; x++) {
       const float pv = en_ch_pv(x, w), net = en_ch_net(x, w), boil = en_ch_boil(x, w);
@@ -442,7 +453,7 @@ static void en_chart_paint(lv_obj_t *cv, int w, int h, int top, bool today) {
         for (int y = hs + 1; y <= hh; y++) lv_canvas_set_px(cv, x, h - 1 - y, c_imp, LV_OPA_COVER);
         if (hp > 0) for (int y = hp - lw + 1; y <= hp; y++) if (y >= 0) lv_canvas_set_px(cv, x, h - 1 - y, c_edge, LV_OPA_COVER);
       }
-      if (!isnan(boil)) {   // a boyler teljesítménye: vékony piros nyom (nem a 0-tól töltve, csak a vonal maga)
+      if (!isnan(boil)) {   // a bojler teljesítménye: vékony piros nyom (nem a 0-tól töltve, csak a vonal maga)
         const int hb = min((int)(boil * k), h - 1);
         for (int y = max(0, hb - bw + 1); y <= hb; y++) lv_canvas_set_px(cv, x, h - 1 - y, c_boil, LV_OPA_COVER);
       }
@@ -506,7 +517,7 @@ static void en_chart_fs_create() {
   lv_obj_set_size(en_fsch_peak, SX(340), S(36));
   lv_label_set_long_mode(en_fsch_peak, LV_LABEL_LONG_DOT);
 
-  static const char *const LEG[2][4] = {{"termelés", "saját", "vétel", "boyler"}, {"solar", "own use", "import", "heater"}};
+  static const char *const LEG[2][4] = {{"termelés", "saját", "vétel", "bojler"}, {"solar", "own use", "import", "heater"}};
   static const uint32_t LC[4] = {EN_COL_PV, EN_COL_SELF, EN_COL_IMP, EN_COL_BOIL};
   for (int k = 0; k < 4; k++) {   // saját sor a cím alatt, bal oldalt (a jobb felső X-et így biztosan nem éri el)
     make_shape(card, SX(20) + k * SX(160), SY(92), S(30), S(8), S(4), LC[k]);
@@ -557,6 +568,11 @@ static bool en_chart_hit(int x, int y) {
   return en_ch_cv && x >= EN_ZL_X + EN_CH_X && x < EN_ZL_X + EN_CH_X + EN_CH_W && y >= EN_ZC_Y + EN_CH_Y && y < EN_ZC_Y + EN_CH_Y + EN_CH_H;
 }
 
+// true, ha (x,y) a Bojler dobozán van (idojaras_15_erintes.ino hívja: a Beállítások Bojler füle nyílik)
+static bool en_boil_hit(int x, int y) {
+  return en_boil_box && x >= EN_ZL_X + EN_BOIL_X && x < EN_ZL_X + EN_BOIL_X + EN_BOIL_W && y >= EN_Z_Y + EN_BOIL_Y && y < EN_Z_Y + EN_BOIL_Y + EN_BOIL_H;
+}
+
 // true, ha (x,y) a teljes képernyős diagram bezáró sarkában van (idojaras_15_erintes.ino hívja)
 static bool en_chart_fs_close_hit(int x, int y) {
   return x >= LCD_H_RES - EN_FSCH_CLOSE_ZONE && y <= EN_FSCH_CLOSE_ZONE;
@@ -598,13 +614,17 @@ static void en_page_update() {
   lv_obj_set_style_text_color(en_house_val, lv_color_hex(!isnan(house) ? house_col : COL_GREY), 0);
   set_label_if_changed(en_house_sub, isnan(house) ? "" : tr("becsült", "estimated"));
 
-  // Boyler: zöld, ha tartja (készenlét), piros, ha fűt. A hőfok (Tuya) ha van, különben csak a wattos fogyasztás
+  // Bojler: zöld, ha tartja (készenlét), piros, ha fűt. A hőfok (Tuya) ha van, különben csak a wattos fogyasztás
   // (a dugalj méréséből) dönti el az állapotot: fűt, ha a wattos fogyasztás > 3 W.
   const bool bl = en_fresh(d.bl_ms, EN_BL_STALE_MS);
   const bool heating = bl ? strcmp(d.boil_state, "heating") == 0 : sk && d.boil_w > EN_BOIL_HEAT_W;
   char sub[24] = "", wb[16] = "";
+  const char *mode = "";
   if (bl) {
-    snprintf(v, sizeof(v), "%.0f°C", d.boil_temp);
+    if (!isnan(d.boil_set)) snprintf(v, sizeof(v), "%.0f/%.0f°C", d.boil_temp, d.boil_set);   // hőfok / cél-hőfok
+    else snprintf(v, sizeof(v), "%.0f°C", d.boil_temp);
+    const int mi = en_bl_mode_idx(d.boil_mode);
+    mode = d.boil_sw == 0 ? tr("kikapcsolva", "off") : mi >= 0 ? TR2(EN_BL_MODE_T)[mi] : d.boil_mode;
     if (!isnan(d.boil_water_pct)) snprintf(sub, sizeof(sub), tr("%.0f%% melegvíz", "%.0f%% hot water"), d.boil_water_pct);
     if (sk) snprintf(wb, sizeof(wb), "%.0f W", d.boil_w);
   } else if (sk) snprintf(v, sizeof(v), "%.0f W", d.boil_w);
@@ -615,9 +635,18 @@ static void en_page_update() {
     set_label_if_changed(en_boil_w, wb);
     lv_obj_set_style_text_color(en_boil_w, lv_color_hex(wb[0] ? boil_col : COL_GREY), 0);
   }
+  if (en_boil_mode) set_label_if_changed(en_boil_mode, mode);
+  if (en_boil_badge) {   // kéz: kézi vezérlés, "A": napelemes automatika (csak ha a bojler Tuyán elérhető)
+    const bool au = en_cfg.bl_auto;
+    lv_obj_set_hidden(en_boil_badge, !bl);
+    lv_obj_set_style_border_color(en_boil_badge, lv_color_hex(au ? COL_YELLOW : COL_GREY), 0);
+    lv_obj_set_style_text_color(en_boil_badge_l, lv_color_hex(au ? COL_YELLOW : COL_GREY), 0);
+    lv_obj_set_style_text_font(en_boil_badge_l, au ? &font_hu_14 : &font_sym_hand, 0);
+    set_label_if_changed(en_boil_badge_l, au ? "A" : EN_SYM_HAND);
+  }
 
   // áramlás: a hálózat és a ház közt egyetlen vonal viszi a vételt (lila, hálózat -> ház) vagy a visszatáplálást
-  // (zöld, ház -> hálózat, megfordított pöttyök); a napelem mindig a házba folyik, a boyler a házban van - ezekhez
+  // (zöld, ház -> hálózat, megfordított pöttyök); a napelem mindig a házba folyik, a bojler a házban van - ezekhez
   // nincs rajzolt vonal.
   if (p1 && exp > 0) en_flow_set(EN_F_GRID_HOUSE, exp, true, EN_COL_GREEN, true);
   else en_flow_set(EN_F_GRID_HOUSE, imp, p1, EN_COL_IMP, false);
@@ -657,7 +686,7 @@ static void en_page_update() {
   // állapot: az első hiba, különben a napelem-adat kora
   char st[160];
   const char *err = (en_cfg.p1[0] && d.p1_err[0]) ? d.p1_err : (en_cfg.sk[0] && d.sk_err[0]) ? d.sk_err : (en_cfg.gt[0] && d.gw_err[0]) ? d.gw_err : "";
-  const char *who = err == d.p1_err ? tr("Hálózat", "Grid") : err == d.sk_err ? tr("Boyler", "Water heater") : tr("Napelem", "Solar");
+  const char *who = err == d.p1_err ? tr("Hálózat", "Grid") : err == d.sk_err ? tr("Bojler", "Water heater") : tr("Napelem", "Solar");
   if (err[0]) snprintf(st, sizeof(st), tr("%s hiba: %s", "%s error: %s"), who, err);
   else if (en_day.since > 0 && en_day.key >= 0)
     snprintf(st, sizeof(st), tr("A mai értékek %02d:%02d óta (az első indulás ma).", "Today's values since %02d:%02d (first start today)."),

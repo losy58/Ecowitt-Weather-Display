@@ -24,7 +24,7 @@
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <mbedtls/aes.h>   // a boyler Tuya-hálózatának titkosításához (energia_01)
+#include <mbedtls/aes.h>   // a bojler Tuya-hálózatának titkosításához (energia_01)
 #include <freertos/idf_additions.h>
 #include <esp_core_dump.h>
 #include <esp_flash.h>
@@ -41,6 +41,9 @@ LV_FONT_DECLARE(font_hu_14);
 LV_FONT_DECLARE(font_seg_96);
 LV_FONT_DECLARE(font_seg_72);
 LV_FONT_DECLARE(font_seg_40);
+// Kézjel (Font Awesome "hand", font_sym_hand.c; 7B: 16, P4: 20 px): a bojler kézi vezérlésének jele
+LV_FONT_DECLARE(font_sym_hand);
+#define EN_SYM_HAND "\xEF\x89\x96"   // U+F256
 
 // LCD_H_RES, LCD_V_RES (a felület mérete) és a skálázó makrók: kijelzo.h
 
@@ -311,13 +314,15 @@ struct DemoVals { float to, rh, p, w, g, dir, sol, rate, ti[3], hi[3], co2[3]; }
 // *_ms: az utolsó sikeres lekérés ideje (millis), 0: még nem volt; grid_w: + vétel, - visszatáplálás
 struct EnCfg {
   bool on; char p1[65], sk[65], gt[65], gs[65]; float kwp; char fw[130];
-  char bl[65], bl_id[32], bl_key[20];   // boyler: Tuya-hálózat (helyi, titkosított), a hőfokhoz és az állapothoz
+  char bl[65], bl_id[32], bl_key[20];   // bojler: Tuya-hálózat (helyi, titkosított), a hőfokhoz és az állapothoz
+  bool bl_auto; int bl_on_w;            // bojler napelemes automatika: be/ki, ennyi W napelem-többletnél kapcsol be
 };   // fw: ide küldi tovább a napelem-adatot (címek vesszővel)
 struct EnData {
   uint32_t p1_ms; float grid_w, u[3], i[3], imp_kwh, exp_kwh; int tariff;
   uint32_t sk_ms; float boil_w, boil_kwh;
   uint32_t gw_ms; float pv_w, pv_day, pv_month, pv_year; char gw_upd[24]; long plant_id; bool gw_remote;   // gw_remote: másik kijelzőtől kaptuk
-  uint32_t bl_ms; float boil_temp, boil_water_pct; char boil_state[16], boil_mode[16];   // boyler: Tuya-hőfok (°C), kivehető melegvíz (%), állapot, üzemmód (gyártói név, pl. "jiheat")
+  uint32_t bl_ms; float boil_temp, boil_water_pct; char boil_state[16], boil_mode[16];   // bojler: Tuya-hőfok (°C), kivehető melegvíz (%), állapot, üzemmód (gyártói név, pl. "jiheat")
+  float boil_set; int8_t boil_sw;       // bojler: cél-hőfok (°C), be/ki (1/0, -1: nem tudjuk)
   char p1_err[48], sk_err[48], gw_err[80], bl_err[48];   // az utolsó lekérés hibája (üres: sikeres)
 };
 // az energia oldal (energia_02) egy köre és egy áramlása (vonal, rajta mozgó pöttyök, érték)
