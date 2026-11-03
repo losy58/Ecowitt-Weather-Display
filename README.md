@@ -63,8 +63,8 @@ Photos of the display in demo mode (made-up data, English interface).
   **Water heater** tab of the settings: on/off, the four modes, target temperature, and the **solar automation**: the
   heater stays on and keeps a base target (e.g. 50 °C, so there is always hot water); when the solar surplus (export plus
   the heater's own use) reaches a set value for 2 minutes, it heats up to the solar target (e.g. 75 °C), storing the free
-  energy as heat; when the surplus is 500 W lower for 5 minutes, it goes back to the base target (Instant mode, as Eco
-  limits the heater to 55 °C). One display is the
+  energy as heat; when the surplus is 500 W lower for 5 minutes, it goes back to the base target (Smart mode: it keeps the target, while
+  Instant mode heats up only once and Eco limits the heater to 55 °C). One display is the
   *controller* (runs the automation and writes to the heater), the others act as remote controls through it, so all of
   them show the same state. Optional phone notifications for heater error codes and automatic switching. The data
   points (DPs) were mapped on a **Thermex** water heater (1 on/off, 2 mode, 9 target, 10 temperature, 13 state, 14 hot

@@ -34,7 +34,7 @@ constexpr uint32_t EN_BL_AFTER_CMD_MS = 1500;          // írás után ennyivel 
 // (bl_t1); ha EN_BA_HYST_W-tal kevesebb, EN_BA_OFF_MS óta, újra az alap (hiszterézis: a felhők ne kapcsolgassák)
 constexpr int EN_BA_DEF_W = 2000, EN_BA_HYST_W = 500, EN_BA_MIN_W = 250, EN_BA_MAX_W = 8000;
 constexpr int EN_BA_DEF_T0 = 50, EN_BA_DEF_T1 = 75, EN_BA_T_MIN = 30, EN_BA_T_MAX = 75;
-#define EN_BA_MODE "jiheat"   // az automatika üzemmódja (Azonnali: a beállított cél-hőfokot tartja)
+#define EN_BA_MODE "manmenu"   // az automatika üzemmódja (Smart: a cél-hőfokot tartja; az Azonnali csak egyszer fűt fel)
 constexpr uint32_t EN_BA_ON_MS = 2UL * 60UL * 1000UL, EN_BA_OFF_MS = 5UL * 60UL * 1000UL, EN_BA_RETRY_MS = 60000;
 // Bojler-vezérlő (főnök): egyetlen kijelző futtatja az automatikát (bl_boss üres); a többin (távirányító, bl_boss = a vezérlő címe)
 // a Bojler fül parancsai a vezérlő /bojler címére mennek, és onnan kérdezik le 10 mp-enként az automatika állapotát. Ha a vezérlő
@@ -937,12 +937,14 @@ static void en_boiler_auto(const EnData &d) {
       }
     }
   }
-  // a bojler állapotának igazítása: be, nem Eco, a megfelelő cél-hőfok (egyszerre egy írás)
+  // a bojler állapotának igazítása: be, Smart mód (az Anti-bakteriális ciklust nem szakítjuk meg), a megfelelő cél-hőfok
+  // (egyszerre egy írás)
   if (last_cmd && millis() - last_cmd < EN_BA_RETRY_MS) return;   // az előző írás még nem látszik
   const int target = en_ba_solar ? en_cfg.bl_t1 : en_cfg.bl_t0;
   char cmd[EN_BL_CMD_LEN] = "";
   if (d.boil_sw == 0) strlcpy(cmd, "\"1\":true", sizeof(cmd));
-  else if (strcmp(d.boil_mode, "eco") == 0) strlcpy(cmd, "\"2\":\"" EN_BA_MODE "\"", sizeof(cmd));
+  else if (d.boil_mode[0] && strcmp(d.boil_mode, EN_BA_MODE) != 0 && strcmp(d.boil_mode, "highwarm") != 0)
+    strlcpy(cmd, "\"2\":\"" EN_BA_MODE "\"", sizeof(cmd));
   else if (fabsf(d.boil_set - target) > 0.5f) snprintf(cmd, sizeof(cmd), "\"9\":%d", target);
   if (!cmd[0]) return;
   last_cmd = millis();
@@ -1240,9 +1242,9 @@ static String en_settings_html() {
   h += "<input name='en_bt0' type='number' min='" + String(EN_BA_T_MIN) + "' max='" + String(EN_BA_T_MAX) + "' value='" + String(en_cfg.bl_t0);
   h += tr("'><label>Napelemes cél-hőfok (°C)</label>", "'><label>Solar target (°C)</label>");
   h += "<input name='en_bt1' type='number' min='" + String(EN_BA_T_MIN) + "' max='" + String(EN_BA_T_MAX) + "' value='" + String(en_cfg.bl_t1);
-  h += tr("'><p style='color:#aaa;margin:0'>Az automatika a bojlert Azonnali módba teszi (az Eco mód 55 °C-ra korlátoz). A kijelzőn: "
+  h += tr("'><p style='color:#aaa;margin:0'>Az automatika a bojlert Smart módba teszi: az a cél-hőfokot tartja (kb. 8 °C hűlésnél újra fűt); az Azonnali mód csak egyszer fűt fel, az Eco 55 °C-ra korlátoz. A kijelzőn: "
           "Beállítások / Bojler; a Be/Ki gomb vagy egy üzemmód választása kézi vezérlésre vált.</p>",
-          "'><p style='color:#aaa;margin:0'>The automation puts the heater in Instant mode (Eco limits it to 55 °C). On the display: "
+          "'><p style='color:#aaa;margin:0'>The automation puts the heater in Smart mode, which keeps the target (reheats after about 8 °C of cooling); Instant mode heats up only once, Eco limits it to 55 °C. On the display: "
           "Settings / Water heater; the On/Off button or choosing a mode switches to manual control.</p>");
   return h;
 }

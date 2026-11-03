@@ -63,7 +63,7 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
   nyílik: be/ki, a négy üzemmód, cél-hőfok és a **napelemes automatika**: a bojler bekapcsolva marad, és egy alap
   cél-hőfokot tart (pl. 50 °C, így mindig van melegvíz); ha a napelem-többlet (visszatáplálás + a bojler saját fogyasztása)
   2 percig eléri a megadott értéket, a napelemes cél-hőfokig fűt (pl. 75 °C), az ingyen energiát hőként tárolva; ha 5 percig
-  500 W-tal kevesebb, vissza az alapra (Azonnali módban, mert az Eco 55 °C-ra korlátoz). Egy kijelző a *vezérlő* (ő futtatja az automatikát és ő írja a bojlert), a többi rajta
+  500 W-tal kevesebb, vissza az alapra (Smart módban: az tartja a cél-hőfokot, az Azonnali mód csak egyszer fűt fel, az Eco 55 °C-ra korlátoz). Egy kijelző a *vezérlő* (ő futtatja az automatikát és ő írja a bojlert), a többi rajta
   keresztül távirányító, így mind ugyanazt mutatja. Telefonos értesítés a bojler hibakódjáról és az automatikus
   kapcsolásról (beállítható). Az adatpontok (DP-k) egy **Thermex** bojleren lettek azonosítva (1 be/ki, 2 üzemmód, 9
   cél-hőfok, 10 hőfok, 13 állapot, 14 melegvíz %, 20 hibakód); más Tuya-bojler más DP-ket használhat.

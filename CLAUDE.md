@@ -197,8 +197,8 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   mp-enként): DP_QUERY (cmd `0x0A`), a kérés/válasz kerete `000055AA` + sorszám(4) + parancs(4) + hossz(4) + titkosított payload +
   CRC32(4) + `0000AA55`; a válasz fejléce után egy 4 bájtos visszatérési kód jön, utána a titkosított JSON. A kapcsolódás lassabb,
   mint a helyi HomeWizard-eszközöké, ezért külön, hosszabb időkorlátja van (`EN_BL_CONNECT_MS`).
-  **DP-k** (kézzel kipróbálva, 2026.11.01.): `1` be/ki, `2` üzemmód (gyártói név: `jiheat` = azonnali fűtés, `eco` = Eco
-  [max. 55°C], `manmenu` = intelligens/smart, `highwarm` = Anti-bakteriális [kizárásos alapon: a bojleren pontosan ez a 4
+  **DP-k** (kézzel kipróbálva, 2026.11.01.): `1` be/ki, `2` üzemmód (gyártói név: `jiheat` = azonnali fűtés [csak EGYSZER fűt fel a célra, utána standby marad, nem tartja: 2026.11.03-án 37 °C-ig hűlt, csak ki-be kapcsolásra indult újra], `eco` = Eco
+  [max. 55°C], `manmenu` = intelligens/smart [tartja a cél-hőfokot: 50 °C-os céllal leállás után a víz kb. 44 °C-ra keveredik, 42 °C-nál újra fűt; 75 °C-ot is elfogad], `highwarm` = Anti-bakteriális [kizárásos alapon: a bojleren pontosan ez a 4
   kapcsolható mód van, a másik hármat egyértelműen azonosítottuk]), `9` cél-hőfok (°C; Eco módban a mód felülírja, más módban a
   ténylegesen beállított érték), `10` jelenlegi hőfok (°C), `13` állapot (`heating` fűt, `warm` tartja, `standby` ki), `14`
   kivehető melegvíz (%), `20` hibakód (bitmap). Az Anti-bakteriális ciklus (80°C-ra fűt, utána visszaáll az eredeti módra) alatt a
@@ -215,9 +215,9 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   lv_font_conv `--range 0xF256`). A dobozra koppintva a Beállítások új **Bojler** füle nyílik (`settings_open_boiler()`): Be/Ki
   (kézi; ha az automatika be volt, kikapcsolja), a 4 üzemmód, cél-hőfok -/+ (30-75, az utolsó koppintás után 1,5 mp-cel küldi),
   automatika be/ki és a többlet-határ -/+ (250 W-onként). **Automatika (v1.10.0-tól két cél-hőfokkal**, a felhasználó kérése: a
-  korábbi be/ki változatnál napnyugta után kikapcsolt, és nem volt melegvíz): `en_boiler_auto()` a bojlert bekapcsolva és Azonnali
-  (`jiheat`) módban tartja (az Eco 55 °C-ra korlátoz), a cél-hőfoka (DP 9) az alap (`bl_t0`, 50 °C); ha a napelem-többlet (=
-  visszatáplálás + a bojler saját fogyasztása) legalább `bl_on_w` (2500 W) 2 percig, a napelemes (`bl_t1`, 75 °C); ha 500 W-tal
+  korábbi be/ki változatnál napnyugta után kikapcsolt, és nem volt melegvíz): `en_boiler_auto()` a bojlert bekapcsolva és Smart
+  (`manmenu`) módban tartja (v1.10.1-től; előtte `jiheat`, de az nem tartja a hőfokot; az Eco 55 °C-ra korlátoz; az Anti-bakteriálist nem szakítja meg), a cél-hőfoka (DP 9) az alap (`bl_t0`, 50 °C); ha a napelem-többlet (=
+  visszatáplálás + a bojler saját fogyasztása) legalább `bl_on_w` (most 2000 W) 2 percig, a napelemes (`bl_t1`, 75 °C); ha 500 W-tal
   kevesebb 5 percig, vissza az alapra. Egyszerre egy írás, utána 60 mp vár. NVS `en_bt0`, `en_bt1`; a /bojler `t0=`, `t1=`.
   Bekapcsolt automatikánál a Bojler fül „Cél-hőfok” sora az alapot állítja, alatta a napelemes; a Be/Ki gomb vagy egy üzemmód
   választása kézire vált. **Hibakód** (DP 20, bitmap, 1. bit = E2): pirosan a dobozban az üzemmód helyén; a vezérlő ntfy-t küld

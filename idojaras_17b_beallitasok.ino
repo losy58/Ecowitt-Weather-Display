@@ -327,9 +327,9 @@ static void create_settings_screen() {
       bp_button(g, ST_BTN_X + ST_TOG_W - ST_BTN_W, y, ST_BTN_W, "+", 0x3A3A3A, NULL);
     }
   }
-  st_text(g, tr("Automatika: a bojler bekapcsolva, Azonnali módban az alap cél-hőfokot tartja; ha a napelem-többlet 2 percig eléri a "
+  st_text(g, tr("Automatika: a bojler bekapcsolva, Smart módban az alap cél-hőfokot tartja; ha a napelem-többlet 2 percig eléri a "
                 "megadott értéket, a napelemes cél-hőfokig fűt, ha 5 percig 500 W-tal kevesebb, vissza az alapra. Be/Ki vagy üzemmód: kézi.",
-                "Automation: the heater stays on in Instant mode at the base target; when the solar surplus reaches the set value for "
+                "Automation: the heater stays on in Smart mode at the base target; when the solar surplus reaches the set value for "
                 "2 min it heats up to the solar target, when it is 500 W lower for 5 min, back to base. On/Off or a mode: manual."),
           sm, COL_GREY, ST_CX, ST_BL_ROW0 + ST_BL_R_COUNT * ST_BL_ROW_H - SY(4), ST_TXT_W);
 
