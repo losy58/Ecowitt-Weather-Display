@@ -52,7 +52,7 @@ Photos of the display in demo mode (made-up data, English interface).
 - **Details** and **Log** pages.
 - **Energy** (optional, off by default): a HomeWizard P1 meter (grid), a HomeWizard Energy Socket (e.g. a water heater)
   and a Growatt solar plant. A power-flow picture (a pylon for the grid and a house with the solar roof and the water
-  heater; moving dots show the direction: import purple, export green), today's import / export and heater consumption,
+  heater; moving dots show the direction: import purple, export green), today's import / export and heater consumption, today's own (solar) share of the consumption in percent,
   voltage and current of the three phases, and a 24-hour chart of production, own use and grid import. Set up on the web
   page. Growatt rejects frequent requests: either one display queries it and forwards the solar data to the others, or
   several displays share the token and take turns (every 15.5 minutes each, 5 min 10 s apart), passing the data to each

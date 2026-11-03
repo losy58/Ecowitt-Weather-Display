@@ -102,7 +102,7 @@ static lv_obj_t *en_boil_box = NULL, *en_boil_val = NULL, *en_boil_sub = NULL, *
 static lv_obj_t *en_boil_badge = NULL, *en_boil_badge_l = NULL;   // kéz: kézi vezérlés, "A": napelemes automatika
 static lv_obj_t *en_pv_val = NULL;
 static lv_obj_t *en_pv_lines[11] = {}, *en_pv_sun = NULL;   // tető, 8 napsugár, 2 oldalvonal + a nap köre: sárga, ha van napelem-adat, egyébként szürke
-static lv_obj_t *en_house_val = NULL, *en_house_sub = NULL;
+static lv_obj_t *en_house_val = NULL, *en_house_sub = NULL, *en_house_own_t = NULL, *en_house_own = NULL;
 static EnFlow en_flows[EN_F_COUNT] = {};
 static lv_obj_t *en_r_pv[3] = {}, *en_r_grid = NULL, *en_r_ph[3] = {}, *en_r_gday[2] = {}, *en_r_boil = NULL, *en_r_status = NULL;
 static bool en_page_visible = false;
@@ -261,8 +261,11 @@ static void en_page_create() {
   en_house_border[3] = en_pylon_line(zl, EN_HB_DIV, S(4));
 
   lv_obj_t *house_title = en_one_line(dlabel(zl, tr("Ház", "House"), sm, COL_GREY, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(10)), EN_HOUSE_TXT_W, S(20));
-  en_house_val = en_one_line(dlabel(zl, "--", hu, COL_TEXT, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(30)), EN_HOUSE_TXT_W, S(36));
-  en_house_sub = en_one_line(dlabel(zl, "", sm, COL_GREY, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(66)), EN_HOUSE_TXT_W, S(20));
+  en_house_val = en_one_line(dlabel(zl, "--", hu, COL_TEXT, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(26)), EN_HOUSE_TXT_W, S(36));
+  en_house_sub = en_one_line(dlabel(zl, "", sm, COL_GREY, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(60)), EN_HOUSE_TXT_W, S(20));
+  // a mai fogyasztás saját (napelemes) része: (termelés - leadás) / (termelés - leadás + vétel)
+  en_house_own_t = en_one_line(dlabel(zl, "", sm, COL_BLUE, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(86)), EN_HOUSE_TXT_W, S(20));
+  en_house_own = en_one_line(dlabel(zl, "", hu, COL_BLUE, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(100)), EN_HOUSE_TXT_W, S(36));
   (void)house_title;
 
   {   // Bojler: kis bordás téglalap a kártyán belül, jobbra lent (nincs hozzá vonal/vezeték - benne van a házban)
@@ -615,6 +618,14 @@ static void en_page_update() {
   set_label_if_changed(en_house_val, v);
   lv_obj_set_style_text_color(en_house_val, lv_color_hex(!isnan(house) ? house_col : COL_GREY), 0);
   set_label_if_changed(en_house_sub, isnan(house) ? "" : tr("becsült", "estimated"));
+  {
+    const float ti = en_today(d.imp_kwh, en_day.imp), te = en_today(d.exp_kwh, en_day.exp);
+    const float own = d.gw_ms && !isnan(d.pv_day) && !isnan(te) ? fmaxf(d.pv_day - te, 0) : NAN;
+    const float use = isnan(own) || isnan(ti) ? NAN : own + ti;
+    if (!isnan(use) && use >= 0.05f) snprintf(v, sizeof(v), "%.0f %%", fminf(100.0f * own / use, 100.0f)); else strlcpy(v, "-- %", sizeof(v));
+    set_label_if_changed(en_house_own_t, tr("saját rész ma", "own share today"));
+    set_label_if_changed(en_house_own, v);
+  }
 
   // Bojler: zöld, ha tartja (készenlét), piros, ha fűt. A hőfok (Tuya) ha van, különben csak a wattos fogyasztás
   // (a dugalj méréséből) dönti el az állapotot: fűt, ha a wattos fogyasztás > 3 W.

@@ -174,7 +174,8 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   A HomeWizard P1 `active_power_w` előjeles (+ vétel, - visszatáplálás); fázisonkénti teljesítményt NEM ad, csak feszültséget és egész
   amperben, előjel nélkül mért áramot, ezért fázisonkénti teljesítményt nem számolunk.
 - **Mai értékek:** a nap eleji mérőállások (`EnDay`, NVS `cfg`/`en_day`, naponta egyszer írva; ha a kijelző napközben indul először, az
-  indulás idejétől számol, ezt kiírja) → mai vétel / leadás / bojler.
+  indulás idejétől számol, ezt kiírja) → mai vétel / leadás / bojler. **Saját rész ma** (v1.11.0, 2026.11.03., a felhasználó kérése):
+  a Ház dobozban, a watt alatt, kékkel: (napelem ma − leadás ma) / (napelem ma − leadás ma + vétel ma); napelem-adat nélkül „-- %”.
 - **Napi diagram:** `/energia.bin` (FFat, `EnPvDay`, magic `ENV2`): 288 db 5 perces szelet, a termelés (W, a felhő időbélyege szerinti
   szeletbe) és a hálózati teljesítmény átlaga (a P1 mintáiból; a szelet végén mentve). Kék = a termelés saját fogyasztásra
   használt része (termelés - leadás), lila = vétel (a kékre rakva), zöld = termelés; hálózati adat nélkül (nem elérhető P1) csak zöld. 0-24 óra; a skála a termelési csúcshoz igazodik

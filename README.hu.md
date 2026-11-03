@@ -52,7 +52,7 @@ Fényképek a kijelzőről bemutató módban (kitalált adatok, angol felület).
 - **Részletes adatok** és **Napló** oldal (a program eseményei).
 - **Energia** (nem kötelező, alapból ki): HomeWizard P1 mérő (hálózat), HomeWizard Energy Socket (pl. bojler) és
   Growatt napelem. Energiaáramlás-kép (villanyoszlop a hálózatnak, egy ház a napelemes tetővel és a bojlerrel; a mozgó
-  pöttyök az irányt mutatják: vétel lila, visszatáplálás zöld), a mai vétel / leadás és a bojler fogyasztása, a három fázis
+  pöttyök az irányt mutatják: vétel lila, visszatáplálás zöld), a mai vétel / leadás és a bojler fogyasztása, a mai fogyasztás saját (napelemes) része százalékban, a három fázis
   feszültsége és árama, és egy 24 órás diagram a termelésről, a saját fogyasztásról és a hálózati vételről. A kezelőoldalon
   állítható. A Growatt a sűrű lekérdezést elutasítja: vagy egy kijelző kérdezi és továbbküldi a napelem adatát a többinek,
   vagy több kijelzőn ugyanaz a token, és felváltva kérdeznek (mindegyik 15,5 percenként, 5 perc 10 mp eltolással), az adatot
