@@ -396,7 +396,7 @@ a felület a teljes 1280x800-at kihasználja.
   (`on_color_trans_done` + szemafor), különben „previous draw operation is not finished”, és részek elvesznek.
 - Háttérvilágítás: GPIO23 PWM (20 kHz, 10 bit, magas = világít). **30 %-ról indul** (`P4_BL_START`), a
   `backlight_task()` húzza fel: azonnali 100 % + WiFi mellett a Mac USB-portjáról táplálva **brownout** (újraindulás).
-  Éles használatra saját töltő kell (a gyártó ≥600 mA-t ír; 2 A-es töltőről nem volt brownout).
+  Éles használatra saját töltő kell (a gyártó ≥600 mA-t ír; 2 A-es töltőről nem volt brownout). A Mac USB-portjáról táplálva megszakítás-watchdog (ok 24, `IDLE0`) és WATCHDOG-újraindulás is előfordult (2026.10.14., 10.19.); saját töltőről hetek óta nincs ilyen.
 - A soros napló a natív USB-porton (`ARDUINO_USB_CDC_ON_BOOT=1`); induláskor legfeljebb 2 mp-et vár a gépre, hogy az
   eleje is látsszon.
 - A RISC-V-n az összeomlás-összefoglaló más (nincs hívási lánc): `mcause`, `mtval`, `ra` (`idojaras_12`).
@@ -534,18 +534,3 @@ a felület a teljes 1280x800-at kihasználja.
 - **Kijelző nem indul** (v1.2.2): ha a JD9365 panel induláskor nem válaszol (a meghajtó a `panel_init()`-ben kiolvassa
   az azonosítóját), a program 2 mp múlva újraindítja a lapot (`RC_PANEL`), legfeljebb 3-szor egymás után
   (`panel_tries`, RTC-memória); a kezelőoldalon az indulás mellett „– a kijelző nem indult” (`BootRec.flags`).
-
-**Nyitott:**
-- Egy WATCHDOG-újraindulás volt (2026.10.14. 23:15, a Mac-ről táplálva, az érintés-hibakeresés közben);
-  még nincs kivizsgálva. Töltőről 15 óra alatt nem fordult elő.
-- **2026.10.18. 17:47, a P4 másik tápra dugásakor** (egy „okos” töltőre; 14:21-kor egy másikra dugva FESZÜLTSÉGESÉS):
-  villanás, megszakítás-watchdog (ok 24 = `Interrupt wdt timeout on CPU0`; a 0. mag az `IDLE0`-ban, a
-  `esp_cpu_wait_for_intr()`-ben várt, nem jött óraütés; a saját kód egyik szálban sem szerepelt), utána az
-  újraindulás eljutott a főciklusig, de a kép fekete maradt, **világító háttérrel** (tehát a `p4_display_init()`
-  sikeres volt: a v1.2.2-es újrapróbálás ezt nem fogja meg). Táp ki/be után rendben. Ugyanazon a tápon öt ki-be
-  dugásnál nem jött elő. Feltevés: a panel a rádugáskor ingadozó feszültségtől elvesztette a beállításait. Lehetséges
-  javítás: a panel állapotának olvasása (DCS `0x0A`, power mode) induláskor és időnként, hibánál a panel újraindítása.
-- **2026.10.19. 17:08-17:18, v1.3.1, csak a Mac USB-portjáról táplálva:** négy megszakítás-watchdog 10 perc alatt (ok 24,
-  `IDLE0`, `esp_cpu_wait_for_intr`; a coredump szerint minden más feladat várakozott, a saját kód egyik szálban sem
-  szerepelt, a CPU1 regiszterei nem mentődtek). Ugyanaz a kép, mint 10.14-én (Macről táplálva) és 10.18-án (tápváltás):
-  valószínűleg táplálási gond. Ellenőrzés: saját töltőről előjön-e.
