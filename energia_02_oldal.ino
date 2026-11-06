@@ -32,7 +32,7 @@ constexpr int EN_CH_FROM = 0, EN_CH_N = 24 * 12;
 constexpr int EN_CH_X = SX(62), EN_CH_Y = SY(52), EN_CH_W = EN_ZL_W - SX(62) - SX(16), EN_CH_H = SY(200);
 constexpr uint32_t EN_CH_GRID = 0x3A3A3A;
 constexpr uint32_t EN_COL_PV = 0x5CC85C, EN_COL_SELF = COL_BLUE;   // termelés, saját fogyasztás (a vétel: EN_COL_IMP)
-constexpr int EN_ROW = SY(36);                     // a jobb oldali sorok távolsága (font_hu_28)
+constexpr int EN_ROW = SY(34);                     // a jobb oldali sorok távolsága (font_hu_28)
 
 // ---- Hálózat: villanyoszlop + doboz (bal oldalon) ----
 // Az oszlop teteje a napelemes tető csúcsával, a doboz alja a jobb oldali kártya aljával van egy magasságban (az
@@ -102,9 +102,9 @@ static lv_obj_t *en_boil_box = NULL, *en_boil_val = NULL, *en_boil_sub = NULL, *
 static lv_obj_t *en_boil_badge = NULL, *en_boil_badge_l = NULL;   // kéz: kézi vezérlés, "A": napelemes automatika
 static lv_obj_t *en_pv_val = NULL;
 static lv_obj_t *en_pv_lines[11] = {}, *en_pv_sun = NULL;   // tető, 8 napsugár, 2 oldalvonal + a nap köre: sárga, ha van napelem-adat, egyébként szürke
-static lv_obj_t *en_house_val = NULL, *en_house_sub = NULL, *en_house_own_t = NULL, *en_house_own = NULL;
+static lv_obj_t *en_house_val = NULL, *en_house_sub = NULL, *en_house_own_t = NULL, *en_house_own = NULL, *en_house_own_kwh = NULL;
 static EnFlow en_flows[EN_F_COUNT] = {};
-static lv_obj_t *en_r_pv[3] = {}, *en_r_grid = NULL, *en_r_ph[3] = {}, *en_r_gday[2] = {}, *en_r_boil = NULL, *en_r_status = NULL;
+static lv_obj_t *en_r_pv[3] = {}, *en_r_grid = NULL, *en_r_ph[3] = {}, *en_r_gday[3] = {}, *en_r_boil = NULL, *en_r_status = NULL;
 static bool en_page_visible = false;
 constexpr int EN_CH_YSTEP = 2000;   // a függőleges tengely 2 kW-onként van beosztva
 constexpr int EN_CH_YLAB_MAX = 6;   // 0, 2, 4, 6, 8, 10 kW (amennyi a "tető" alatt elfér)
@@ -266,6 +266,8 @@ static void en_page_create() {
   // a mai fogyasztás saját (napelemes) része: (termelés - leadás) / (termelés - leadás + vétel)
   en_house_own_t = en_one_line(dlabel(zl, "", sm, COL_BLUE, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(86)), EN_HOUSE_TXT_W, S(20));
   en_house_own = en_one_line(dlabel(zl, "", hu, COL_BLUE, EN_HOUSE_TXT_X, EN_HC_DIV_Y + SY(100)), EN_HOUSE_TXT_W, S(36));
+  // ugyanez kWh-ban, a % sorában, jobbra zárva, a nagy szám alapvonalán
+  en_house_own_kwh = en_one_line(dlabel_r(zl, "", sm, COL_BLUE, EN_HOUSE_TXT_X + EN_HOUSE_TXT_W, EN_HC_DIV_Y + SY(100) + S(13), S(60)), S(60), S(20));
   (void)house_title;
 
   {   // Bojler: kis bordás téglalap a kártyán belül, jobbra lent (nincs hozzá vonal/vezeték - benne van a házban)
@@ -323,11 +325,12 @@ static void en_page_create() {
   int y = SY(12);
   dlabel(zr, tr("Napelem", "Solar"), hu, COL_YELLOW, x0, y); y += EN_ROW;
   for (int k = 0; k < 3; k++) { en_r_pv[k] = en_one_line(dlabel(zr, "", hu, COL_TEXT, x0, y), lw, EN_ROW); y += EN_ROW; }
-  y += SY(14);
+  y += SY(10);
   en_r_grid = en_one_line(dlabel(zr, tr("Hálózat", "Grid"), hu, COL_ORANGE, x0, y), lw, EN_ROW); y += EN_ROW;   // + a tarifa
   for (int k = 0; k < 3; k++) { en_r_ph[k] = en_one_line(dlabel(zr, "", hu, COL_TEXT, x0, y), lw, EN_ROW); y += EN_ROW; }
-  for (int k = 0; k < 2; k++) { en_r_gday[k] = en_one_line(dlabel(zr, "", hu, COL_TEXT, x0, y), lw, EN_ROW); y += EN_ROW; }
-  y += SY(14);
+  static const uint32_t GDAY_COL[3] = {EN_COL_IMP, EN_COL_GREEN, COL_BLUE};   // vett, adott, ház
+  for (int k = 0; k < 3; k++) { en_r_gday[k] = en_one_line(dlabel(zr, "", hu, GDAY_COL[k], x0, y), lw, EN_ROW); y += EN_ROW; }
+  y += SY(10);
   dlabel(zr, tr("Bojler", "Water heater"), hu, EN_COL_BOIL, x0, y); y += EN_ROW;
   en_r_boil = en_one_line(dlabel(zr, "", hu, COL_TEXT, x0, y), lw, EN_ROW); y += EN_ROW;
   // alul: az adatok kora vagy a hiba (két sor)
@@ -618,13 +621,20 @@ static void en_page_update() {
   set_label_if_changed(en_house_val, v);
   lv_obj_set_style_text_color(en_house_val, lv_color_hex(!isnan(house) ? house_col : COL_GREY), 0);
   set_label_if_changed(en_house_sub, isnan(house) ? "" : tr("becsült", "estimated"));
+  const float ti = en_today(d.imp_kwh, en_day.imp), te = en_today(d.exp_kwh, en_day.exp);
+  // a termelés saját használatra jutó része. A napi termelés csak a Growatt-adattal változik, a leadás folyamatosan: az adat
+  // érkezésekori leadásból számolunk, különben két frissítés között a saját rész (és a ház fogyasztása) látszólag csökkenne.
+  static uint32_t own_gw_ms = 0;
+  static float own_te = NAN;
+  if (d.gw_ms != own_gw_ms || isnan(own_te)) { own_gw_ms = d.gw_ms; own_te = te; }
+  const float own = d.gw_ms && !isnan(d.pv_day) && !isnan(own_te) ? fmaxf(d.pv_day - own_te, 0) : NAN;
+  const float use = isnan(own) || isnan(ti) ? NAN : own + ti;                                     // a ház mai összfogyasztása (a bojlerrel együtt)
   {
-    const float ti = en_today(d.imp_kwh, en_day.imp), te = en_today(d.exp_kwh, en_day.exp);
-    const float own = d.gw_ms && !isnan(d.pv_day) && !isnan(te) ? fmaxf(d.pv_day - te, 0) : NAN;
-    const float use = isnan(own) || isnan(ti) ? NAN : own + ti;
     if (!isnan(use) && use >= 0.05f) snprintf(v, sizeof(v), "%.0f %%", fminf(100.0f * own / use, 100.0f)); else strlcpy(v, "-- %", sizeof(v));
     set_label_if_changed(en_house_own_t, tr("saját rész ma", "own share today"));
     set_label_if_changed(en_house_own, v);
+    if (!isnan(own)) snprintf(v, sizeof(v), "%.1f kWh", own); else v[0] = 0;
+    set_label_if_changed(en_house_own_kwh, v);
   }
 
   // Bojler: zöld, ha tartja (készenlét), piros, ha fűt. A hőfok (Tuya) ha van, különben csak a wattos fogyasztás
@@ -693,11 +703,13 @@ static void en_page_update() {
     set_label_if_changed(en_r_ph[k], b);
     lv_obj_set_style_text_color(en_r_ph[k], lv_color_hex(p1 && d.u[k] > EN_OVERVOLT_V ? COL_WARN : COL_TEXT), 0);
   }
-  const float ti = en_today(d.imp_kwh, en_day.imp), te = en_today(d.exp_kwh, en_day.exp), tb = en_today(d.boil_kwh, en_day.boil);
+  const float tb = en_today(d.boil_kwh, en_day.boil);
   if (!isnan(ti)) snprintf(b, sizeof(b), tr("Ma vett: %.1f kWh", "Imported today: %.1f kWh"), ti); else strlcpy(b, tr("Ma vett: -- kWh", "Imported today: -- kWh"), sizeof(b));
   set_label_if_changed(en_r_gday[0], b);
   if (!isnan(te)) snprintf(b, sizeof(b), tr("Ma adott: %.1f kWh", "Exported today: %.1f kWh"), te); else strlcpy(b, tr("Ma adott: -- kWh", "Exported today: -- kWh"), sizeof(b));
   set_label_if_changed(en_r_gday[1], b);
+  if (!isnan(use)) snprintf(b, sizeof(b), tr("Ma ház: %.1f kWh", "House today: %.1f kWh"), use); else strlcpy(b, tr("Ma ház: -- kWh", "House today: -- kWh"), sizeof(b));
+  set_label_if_changed(en_r_gday[2], b);
   if (!isnan(tb)) snprintf(b, sizeof(b), tr("Ma: %.2f kWh", "Today: %.2f kWh"), tb); else strlcpy(b, tr("Ma: -- kWh", "Today: -- kWh"), sizeof(b));
   set_label_if_changed(en_r_boil, b);
   en_chart_update();

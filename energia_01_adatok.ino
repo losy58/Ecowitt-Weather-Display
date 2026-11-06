@@ -153,7 +153,7 @@ static void en_net_task(const EnData &d) {
   if ((n > 0 || bn > 0) && millis() - last_live >= 30000) {
     last_live = millis();
     en_pv_day(key);
-    en_pv.net[s] = (int16_t)constrain((int)lroundf(sum / n), -32000, 32000);
+    if (n > 0) en_pv.net[s] = (int16_t)constrain((int)lroundf(sum / n), -32000, 32000);   // n == 0: még csak a dugaljtól jött adat (újraindulás után)
     en_pv_ver++;
   }
 }

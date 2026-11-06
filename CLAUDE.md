@@ -175,9 +175,9 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   amperben, előjel nélkül mért áramot, ezért fázisonkénti teljesítményt nem számolunk.
 - **Mai értékek:** a nap eleji mérőállások (`EnDay`, NVS `cfg`/`en_day`, naponta egyszer írva; ha a kijelző napközben indul először, az
   indulás idejétől számol, ezt kiírja) → mai vétel / leadás / bojler. **Saját rész ma** (v1.11.0, 2026.11.03., a felhasználó kérése):
-  a Ház dobozban, a watt alatt, kékkel: (napelem ma − leadás ma) / (napelem ma − leadás ma + vétel ma); napelem-adat nélkül „-- %”.
+  a Ház dobozban, a watt alatt, kékkel: (napelem ma − leadás ma) / (napelem ma − leadás ma + vétel ma); napelem-adat nélkül „-- %”. Mellette a saját rész kWh-ban, a jobb oszlopban „Ma vett” (lila), „Ma adott” (zöld), „Ma ház” (kék, saját rész + vétel, a bojlerrel; v1.11.1, a felhasználó kérése). A saját részt a Growatt-adat érkezésekori leadásból számoljuk (a napi termelés csak akkor változik, a leadás folyamatosan: különben két frissítés között látszólag csökkenne).
 - **Napi diagram:** `/energia.bin` (FFat, `EnPvDay`, magic `ENV2`): 288 db 5 perces szelet, a termelés (W, a felhő időbélyege szerinti
-  szeletbe) és a hálózati teljesítmény átlaga (a P1 mintáiból; a szelet végén mentve). Kék = a termelés saját fogyasztásra
+  szeletbe) és a hálózati teljesítmény átlaga (a P1 mintáiból; a szelet végén mentve). A futó szeletbe csak P1-minta után kerülhet érték (v1.11.1: újraindulás után, ha előbb a dugalj válaszolt, 0/0 került bele, és a diagramon a tetejéig érő lila tüske látszott). Kék = a termelés saját fogyasztásra
   használt része (termelés - leadás), lila = vétel (a kékre rakva), zöld = termelés; hálózati adat nélkül (nem elérhető P1) csak zöld. 0-24 óra; a skála a termelési csúcshoz igazodik
   (0,5 / 1 / 1,5 / 2 kW, felette egész kW), a nagyobb fogyasztás a tetején levágva. Új szelet-formátumnál új magic kell.
 - **Az oldal** (`PAGE_ENERGY`, a főoldal után): csak bekapcsolt energiánál van a lapozásban (`page_step()`), NEM ugrik vissza magától a
