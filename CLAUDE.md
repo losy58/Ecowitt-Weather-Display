@@ -233,6 +233,13 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   ill. `auto=`, `on_w=`; a sorban `@`-tal kezdődő elem az automatika), az írja a bojlert. Ha a vezérlő nem elérhető, a DP-írás
   (Be/Ki, üzemmód, cél-hőfok) közvetlenül a bojlerhez megy, az automatika nem állítható. Így bármelyik kijelzőn váltva mind
   ugyanazt mutatja (a felhasználó egyenrangú szinkront is felvetett; a főnökös változat mellett döntött, mert nem csúszhat el).
+- **Reggeli Eco-ablak (v1.12.0, 2026.11.07., a felhasználó kérése: a reggeli zuhanyra legyen elég melegvíz, de ne a drágább
+  (T1) tarifában fűtsön):** `en_boiler_auto()` minden nap 5:00-6:00 között (helyi idő, `EN_BA_MORN_H0/H1`) Eco módra váltja a
+  bojlert (az 55 °C-os plafonjáig felfűt, a cél-hőfokot nem írjuk át), 6:00-kor vissza Smart módra, az alap cél-hőfokra; a
+  napelemes cél-hőfok elsőbbséget kap (ha épp az van érvényben, a reggeli ablak kimarad). Kipróbálva (2026.11.07.): 5:00-kor
+  kb. negyedórát fűtött, 6:00-kor nem indult újra fűtés (a víz már a 48 °C-os alap fölött volt). Nincs nap szerinti
+  megkülönböztetés (a felhasználó kérése: „nem is kell a munkanapokkal foglalkozni, lehet minden nap”) és nincs
+  tarifánkénti díjkülönbség-figyelés sem (azt még nem vezették be).
 - **S3-as 7B: OTA után az újraindítás oka néha `RTCWDT_RTC_RST`** (a szoftveres reset nem fejeződik be, az ESP-IDF tartalék RTC
   watchdogja végzi, kb. 1 mp múlva; a kijelző ártalmatlanul elindul). A `diag_init()` ezt kért újraindításnak jegyzi, ha a program
   maga kért újraindítást (`diag_mark_restart`). A P4-en nem fordult elő; az okát nem találtuk meg (a háttérfeladat leállítása

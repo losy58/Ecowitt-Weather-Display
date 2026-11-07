@@ -36,6 +36,9 @@ constexpr int EN_BA_DEF_W = 2000, EN_BA_HYST_W = 500, EN_BA_MIN_W = 250, EN_BA_M
 constexpr int EN_BA_DEF_T0 = 50, EN_BA_DEF_T1 = 75, EN_BA_T_MIN = 30, EN_BA_T_MAX = 75;
 #define EN_BA_MODE "manmenu"   // az automatika üzemmódja (Smart: a cél-hőfokot tartja; az Azonnali csak egyszer fűt fel)
 constexpr uint32_t EN_BA_ON_MS = 2UL * 60UL * 1000UL, EN_BA_OFF_MS = 5UL * 60UL * 1000UL, EN_BA_RETRY_MS = 60000;
+// reggeli Eco-ablak (a felhasználó kérése): minden nap 5:00-6:00 Eco módra vált (az 55 °C-os korlátig felfűt, még az
+// olcsóbb tarifában), 6:00-kor vissza Smart módra, az alap cél-hőfokra; a napelemes cél-hőfok elsőbbséget kap
+constexpr int EN_BA_MORN_H0 = 5, EN_BA_MORN_H1 = 6;
 // Bojler-vezérlő (főnök): egyetlen kijelző futtatja az automatikát (bl_boss üres); a többin (távirányító, bl_boss = a vezérlő címe)
 // a Bojler fül parancsai a vezérlő /bojler címére mennek, és onnan kérdezik le 10 mp-enként az automatika állapotát. Ha a vezérlő
 // nem elérhető, a Be/Ki, az üzemmód és a cél-hőfok közvetlenül a bojlerhez megy; az automatika ilyenkor nem állítható.
@@ -938,14 +941,17 @@ static void en_boiler_auto(const EnData &d) {
     }
   }
   // a bojler állapotának igazítása: be, Smart mód (az Anti-bakteriális ciklust nem szakítjuk meg), a megfelelő cél-hőfok
-  // (egyszerre egy írás)
+  // (egyszerre egy írás); reggel 5-6 között Eco mód (napelemes cél-hőfok esetén nem), az Eco a cél-hőfokot nem írja át
   if (last_cmd && millis() - last_cmd < EN_BA_RETRY_MS) return;   // az előző írás még nem látszik
+  bool morning = false;
+  if (!en_ba_solar) { struct tm t; morning = get_local_tm(t) && t.tm_hour >= EN_BA_MORN_H0 && t.tm_hour < EN_BA_MORN_H1; }
+  const char *want_mode = morning ? "eco" : EN_BA_MODE;
   const int target = en_ba_solar ? en_cfg.bl_t1 : en_cfg.bl_t0;
   char cmd[EN_BL_CMD_LEN] = "";
   if (d.boil_sw == 0) strlcpy(cmd, "\"1\":true", sizeof(cmd));
-  else if (d.boil_mode[0] && strcmp(d.boil_mode, EN_BA_MODE) != 0 && strcmp(d.boil_mode, "highwarm") != 0)
-    strlcpy(cmd, "\"2\":\"" EN_BA_MODE "\"", sizeof(cmd));
-  else if (fabsf(d.boil_set - target) > 0.5f) snprintf(cmd, sizeof(cmd), "\"9\":%d", target);
+  else if (d.boil_mode[0] && strcmp(d.boil_mode, want_mode) != 0 && strcmp(d.boil_mode, "highwarm") != 0)
+    snprintf(cmd, sizeof(cmd), "\"2\":\"%s\"", want_mode);
+  else if (!morning && fabsf(d.boil_set - target) > 0.5f) snprintf(cmd, sizeof(cmd), "\"9\":%d", target);
   if (!cmd[0]) return;
   last_cmd = millis();
   en_boiler_cmd(cmd);
