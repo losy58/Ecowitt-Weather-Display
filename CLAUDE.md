@@ -240,6 +240,17 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   kb. negyedórát fűtött, 6:00-kor nem indult újra fűtés (a víz már a 48 °C-os alap fölött volt). Nincs nap szerinti
   megkülönböztetés (a felhasználó kérése: „nem is kell a munkanapokkal foglalkozni, lehet minden nap”) és nincs
   tarifánkénti díjkülönbség-figyelés sem (azt még nem vezették be).
+- **Napi Anti-bakteriális ciklus (v1.13.0, 2026.11.07., a felhasználó kérése, kiesés elleni védelem helyett energia-
+  kihasználás: „naponta lehetne csinálni egy anti-bakteriális ciklust is, mondjuk amikor a visszatermelés 3000w felé
+  megy”):** `en_boiler_auto()` naponta egyszer (`hw_day`, év*400+nap kulccsal), ha a napelem-többlet folyamatosan
+  legalább `EN_BA_HW_W` = 3000 W legalább `EN_BA_HW_ON_MS` = 5 percig, DP 2-t `highwarm`-ra írja; onnantól a bojler
+  saját logikája veszi át (80 °C-ra fűt, 30 perc hőkonzerválás, utána magától visszaáll az előző módra) – a kijelző
+  csak elindítja, nem figyeli a lezárását. Az automatika amíg a ciklus fut (`boil_mode == "highwarm"`), nem ír bele
+  (a hiszterézis és a reggeli Eco-ablak is kimarad). ntfy-értesítés indításkor (NT_BOIL). Kipróbálva (2026.11.07.):
+  kézi indítás után a hivatalos Thermex Digital kézikönyvben leírtak szerint lezajlott (80 °C → 30 perc tartás →
+  automatikus visszaállás Smart módra), a mérés a leírt 30 perchez képest 31 percet mutatott; az automatikus napi
+  indítás ugyanezen a napon, 11:37-kor lefutott (ntfy: „Bojler: Anti-bakteriális ciklus”), utána a bojler Smart
+  módban, a napelemes cél-hőfokon folytatta.
 - **S3-as 7B: OTA után az újraindítás oka néha `RTCWDT_RTC_RST`** (a szoftveres reset nem fejeződik be, az ESP-IDF tartalék RTC
   watchdogja végzi, kb. 1 mp múlva; a kijelző ártalmatlanul elindul). A `diag_init()` ezt kért újraindításnak jegyzi, ha a program
   maga kért újraindítást (`diag_mark_restart`). A P4-en nem fordult elő; az okát nem találtuk meg (a háttérfeladat leállítása

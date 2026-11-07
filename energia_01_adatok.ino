@@ -39,6 +39,10 @@ constexpr uint32_t EN_BA_ON_MS = 2UL * 60UL * 1000UL, EN_BA_OFF_MS = 5UL * 60UL 
 // reggeli Eco-ablak (a felhasználó kérése): minden nap 5:00-6:00 Eco módra vált (az 55 °C-os korlátig felfűt, még az
 // olcsóbb tarifában), 6:00-kor vissza Smart módra, az alap cél-hőfokra; a napelemes cél-hőfok elsőbbséget kap
 constexpr int EN_BA_MORN_H0 = 5, EN_BA_MORN_H1 = 6;
+// napi Anti-bakteriális ciklus (a felhasználó kérése): ha legalább ennyi a napelem-többlet, ennyi ideig folyamatosan,
+// naponta egyszer elindítja; utána a bojler saját logikája 80 °C-ra fűt, 30 perc hőkonzerválás után magától visszaáll
+constexpr int EN_BA_HW_W = 3000;
+constexpr uint32_t EN_BA_HW_ON_MS = 5UL * 60UL * 1000UL;
 // Bojler-vezérlő (főnök): egyetlen kijelző futtatja az automatikát (bl_boss üres); a többin (távirányító, bl_boss = a vezérlő címe)
 // a Bojler fül parancsai a vezérlő /bojler címére mennek, és onnan kérdezik le 10 mp-enként az automatika állapotát. Ha a vezérlő
 // nem elérhető, a Be/Ki, az üzemmód és a cél-hőfok közvetlenül a bojlerhez megy; az automatika ilyenkor nem állítható.
@@ -915,11 +919,12 @@ static void handle_bojler() {
 static float en_ba_avail = NAN;   // a legutóbbi többlet (W; NAN: nem számolható), a Beállításokban látszik
 static int8_t en_ba_solar = -1;   // napelemes cél-hőfok van-e érvényben (-1: még nem tudjuk; az első adatból: cél >= bl_t1)
 static void en_boiler_auto(const EnData &d) {
-  static uint32_t since = 0, last_cmd = 0;
+  static uint32_t since = 0, last_cmd = 0, hw_since = 0;
+  static int32_t hw_day = -1;   // melyik napon volt már az Anti-bakteriális ciklus (év*400 + az év napja)
   const bool bl = en_fresh(d.bl_ms, EN_BL_STALE_MS), p1 = en_fresh(d.p1_ms, EN_LOCAL_STALE_MS);
   en_ba_avail = p1 ? -d.grid_w + (en_fresh(d.sk_ms, EN_LOCAL_STALE_MS) ? d.boil_w : 0.0f) : NAN;
-  if (!en_cfg.bl_auto || en_cfg.bl_boss[0]) { since = 0; en_ba_solar = -1; return; }   // csak a vezérlő kapcsol
-  if (!bl || !p1 || d.boil_sw < 0 || isnan(d.boil_set)) { since = 0; return; }
+  if (!en_cfg.bl_auto || en_cfg.bl_boss[0]) { since = 0; hw_since = 0; en_ba_solar = -1; return; }   // csak a vezérlő kapcsol
+  if (!bl || !p1 || d.boil_sw < 0 || isnan(d.boil_set)) { since = 0; hw_since = 0; return; }
   if (en_ba_solar < 0) en_ba_solar = d.boil_set >= en_cfg.bl_t1 - 0.5f;
   // hiszterézis: napelemes cél-hőfokra váltás / vissza
   const bool want = en_ba_solar ? en_ba_avail >= en_cfg.bl_on_w - EN_BA_HYST_W : en_ba_avail >= en_cfg.bl_on_w;
@@ -943,6 +948,28 @@ static void en_boiler_auto(const EnData &d) {
   // a bojler állapotának igazítása: be, Smart mód (az Anti-bakteriális ciklust nem szakítjuk meg), a megfelelő cél-hőfok
   // (egyszerre egy írás); reggel 5-6 között Eco mód (napelemes cél-hőfok esetén nem), az Eco a cél-hőfokot nem írja át
   if (last_cmd && millis() - last_cmd < EN_BA_RETRY_MS) return;   // az előző írás még nem látszik
+  // napi Anti-bakteriális ciklus indítása (lásd a konstansoknál); a bojler már highwarm módban van: nincs mit indítani
+  struct tm tnow;
+  const bool have_tm = get_local_tm(tnow);
+  const int32_t today = have_tm ? (tnow.tm_year + 1900) * 400 + tnow.tm_yday : -1;
+  if (today >= 0 && hw_day != today && d.boil_sw != 0 && strcmp(d.boil_mode, "highwarm") != 0) {
+    if (en_ba_avail >= EN_BA_HW_W) {
+      if (!hw_since) hw_since = millis();
+      if (millis() - hw_since >= EN_BA_HW_ON_MS) {
+        hw_day = today;
+        hw_since = 0;
+        last_cmd = millis();
+        en_boiler_cmd("\"2\":\"highwarm\"");
+        logout_printf("Bojler: napi Anti-bakteriális ciklus indítva (többlet %.0f W)\n", en_ba_avail);
+        if ((cfg.nt_mask & NT_BOIL) && !is_night()) {
+          char msg[96];
+          snprintf(msg, sizeof(msg), tr("Napi Anti-bakteriális ciklus indult (napelem-többlet: %.0f W).", "Daily anti-bacterial cycle started (solar surplus: %.0f W)."), en_ba_avail);
+          nt_push(tr("Bojler: Anti-bakteriális ciklus", "Water heater: anti-bacterial cycle"), msg, 2, "droplet");
+        }
+        return;
+      }
+    } else hw_since = 0;
+  }
   bool morning = false;
   if (!en_ba_solar) { struct tm t; morning = get_local_tm(t) && t.tm_hour >= EN_BA_MORN_H0 && t.tm_hour < EN_BA_MORN_H1; }
   const char *want_mode = morning ? "eco" : EN_BA_MODE;
