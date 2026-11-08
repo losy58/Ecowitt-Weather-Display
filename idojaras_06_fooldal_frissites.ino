@@ -290,7 +290,9 @@ static void update_status_bar() {
   }
   if (!cfg.has_loc) {
     if (warn[0]) strlcat(warn, "   ", sizeof(warn));
-    strlcat(warn, tr("Hely: " MDNS_HOST ".local", "Location: " MDNS_HOST ".local"), sizeof(warn));
+    char mw[48];
+    snprintf(mw, sizeof(mw), tr("Hely: %s.local", "Location: %s.local"), mdns_name());
+    strlcat(warn, mw, sizeof(warn));
   }
   set_label_if_changed(lbl_warn, warn);
   // a főoldal címe: csak figyelmeztetés nélkül (különben annak adja át a helyét)

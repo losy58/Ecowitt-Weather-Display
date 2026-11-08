@@ -181,8 +181,8 @@ static void st_refresh_info() {
   if (!st_ov) return;
   char b[400];
   if (WiFi.status() == WL_CONNECTED)
-    snprintf(b, sizeof(b), tr("Hálózat: %s\nJelerősség: %d dBm (adóteljesítmény: %s)\nIP-cím: %s\nNév a hálózaton: " MDNS_HOST ".local", "Network: %s\nSignal: %d dBm (TX power: %s)\nIP address: %s\nName on the network: " MDNS_HOST ".local"),
-             WiFi.SSID().c_str(), (int)WiFi.RSSI(), wifiTxName(), WiFi.localIP().toString().c_str());
+    snprintf(b, sizeof(b), tr("Hálózat: %s\nJelerősség: %d dBm (adóteljesítmény: %s)\nIP-cím: %s\nNév a hálózaton: %s.local", "Network: %s\nSignal: %d dBm (TX power: %s)\nIP address: %s\nName on the network: %s.local"),
+             WiFi.SSID().c_str(), (int)WiFi.RSSI(), wifiTxName(), WiFi.localIP().toString().c_str(), mdns_name());
   else {
     char ln[96], ss[40];
     wifiStatusLine(ln, sizeof(ln));
@@ -304,9 +304,12 @@ static void create_settings_screen() {
 #endif
   bp_button(g, ST_CX, ST_DEMO_Y, ST_ACT_W, g_demo ? tr("Bemutató kikapcsolása...", "Turn off demo...") : tr("Bemutató mód...", "Demo mode..."),
             0x4A3A6A, NULL);
-  st_text(g, tr("A kezelőoldal jelszava és a percre pontos időpontok a webes kezelőoldalon állíthatók: http://" MDNS_HOST ".local/",
-                "The web page password and minute-exact times can be set on the web page: http://" MDNS_HOST ".local/"),
-          sm, COL_GREY, ST_CX, ST_SYS_Y + SY(80), ST_TXT_W);
+  {
+    char pwt[96];
+    snprintf(pwt, sizeof(pwt), tr("A kezelőoldal jelszava és a percre pontos időpontok a webes kezelőoldalon állíthatók: http://%s.local/",
+                                  "The web page password and minute-exact times can be set on the web page: http://%s.local/"), mdns_name());
+    st_text(g, pwt, sm, COL_GREY, ST_CX, ST_SYS_Y + SY(80), ST_TXT_W);
+  }
 
   // Bojler: állapot, be/ki, üzemmód, cél-hőfok, napelemes automatika
   g = st_grp[ST_T_BOIL];

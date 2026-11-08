@@ -162,7 +162,7 @@ void app_setup() {
   my_server.on("/update", HTTP_POST, handle_update_done, handle_update_upload);
   my_server.on("/settings", HTTP_POST, handle_settings_save);
   my_server.on("/raw", HTTP_GET, handle_raw_page);
-  if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
+  if (MDNS.begin(mdns_name())) MDNS.addService("http", "tcp", 80);
   my_server.on("/screenshot", HTTP_GET, handle_screenshot);   // képernyőkép BMP-ben (idojaras_17g)
   my_server.on("/energia", HTTP_POST, handle_energia_post);   // a másik kijelzőtől érkező napelem-adat (energia_01)
   my_server.on("/bojler", handle_bojler);   // a bojler vezérlője: állapot (GET) és a távirányító kijelzők parancsai (POST)

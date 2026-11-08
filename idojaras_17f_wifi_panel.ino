@@ -133,14 +133,14 @@ static void wifi_connected() {
   LogOut.println("WiFi csatlakozva");
   configTzTime(cfg.tz, "pool.ntp.org", "time.google.com");
   MDNS.end();   // az új hálózaton is elérhető legyen a nevével
-  if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
+  if (MDNS.begin(mdns_name())) MDNS.addService("http", "tcp", 80);
   update_status_bar();
   if (!wp_ov) return;
   char b[200];
   set_label_if_changed(wp_title, tr("WiFi: csatlakozva", "WiFi: connected"));
-  snprintf(b, sizeof(b), tr("Hálózat: %s, IP-cím: %s (a konzolokban ezt kell megadni). Kezelőoldal: http://" MDNS_HOST ".local/",
-                            "Network: %s, IP address: %s (enter this in the consoles). Web page: http://" MDNS_HOST ".local/"),
-           WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+  snprintf(b, sizeof(b), tr("Hálózat: %s, IP-cím: %s (a konzolokban ezt kell megadni). Kezelőoldal: http://%s.local/",
+                            "Network: %s, IP address: %s (enter this in the consoles). Web page: http://%s.local/"),
+           WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), mdns_name());
   set_label_if_changed(wp_state, b);
   lv_obj_set_style_text_color(wp_state, lv_color_hex(0x66BB6A), 0);
   wp_close_at = millis() + 15000;

@@ -124,8 +124,9 @@ static void handle_portal_page() {
   h += "</p>";
   h += wifi_form_html(en, true);
   h += "<p style='color:#aaa'>";
-  h += TL("Csatlakozás után a kezelőoldal (beállítások, frissítés) a saját hálózatodon: http://" MDNS_HOST ".local/",
-          "After connecting, the web page (settings, updates) is on your own network: http://" MDNS_HOST ".local/");
+  snprintf(b, sizeof(b), TL("Csatlakozás után a kezelőoldal (beállítások, frissítés) a saját hálózatodon: http://%s.local/",
+                            "After connecting, the web page (settings, updates) is on your own network: http://%s.local/"), mdns_name());
+  h += b;
   h += "</p></body></html>";
   cur_srv->send(200, "text/html; charset=utf-8", h);
 }
@@ -200,8 +201,8 @@ static void handle_wifi_set() {
   cur_srv->sendHeader("Connection", "close");
   // az oldal 2 mp-enként lekérdezi az állapotot (az átállás alatt a kijelző nem válaszol), és kiírja az eredményt
   char ap[200];
-  snprintf(ap, sizeof(ap), TL(" A beállító hálózat (%s) 1 perc múlva bezárul. Kezelőoldal: http://" MDNS_HOST ".local/",
-                              " The setup network (%s) closes in 1 minute. Web page: http://" MDNS_HOST ".local/"), wifiApName());
+  snprintf(ap, sizeof(ap), TL(" A beállító hálózat (%s) 1 perc múlva bezárul. Kezelőoldal: http://%s.local/",
+                              " The setup network (%s) closes in 1 minute. Web page: http://%s.local/"), wifiApName(), mdns_name());
   String pg = String("<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
                 "<body style='font-family:sans-serif;background:#121212;color:#eee;padding:30px'><h2 id='h'>") + TL("Átállás folyamatban...", "Switching...") +
               "</h2><p>" + TL("Csatlakozás ide: ", "Connecting to: ") + "<b>" + html_attr(wifi_new_ssid) + "</b></p><p id='m'>" +

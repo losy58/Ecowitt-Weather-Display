@@ -99,18 +99,27 @@ watchdog figyeli, tehát semmi nem blokkolhat. Az LVGL-t csak a főszál hívhat
 Három konzol küld (`rooms[]`, a `model`/`stationtype` mező alapján azonosítva): a kinti (WS90) adat az elsőtől jön,
 a többitől csak `OUTDOOR_FAILOVER_S` hallgatás után; a benti adat helyiségenként külön.
 
-**Továbbküldés másik kijelzőre:** a konzolok általában csak egy címre küldenek (most a 7B-re), ezért a
-7B továbbküldi az adatokat a P4-nek. **Mindkét kijelző tud továbbküldeni** (közös kód; a felhasználó kérése): ha a konzolok
-a P4-re küldenek, a P4-en kell bekapcsolni, a 7B céllal. A beállítás csak a webes kezelőoldalon van, a kijelzőn nincs. A kezelőoldalon „Továbbküldés másik kijelzőre”: be/ki kapcsoló (NVS `cfg`/`fw_on`,
-alapból ki; a felhasználó kérése) és cél (`cfg`/`fw_h`, pl. `idojaras-p4.local` vagy egy IP-cím, esetleg `:port`);
-kikapcsolva vagy üres céllal nincs továbbküldés, a cél kikapcsolva is megmarad. A `handle_ecowitt_post()` a
-`fw_push()`-sal a beérkezett mezőket urlencoded alakban egy 4 elemes sorba teszi (PSRAM-puffer, `FwMsg`, legfeljebb
-`FW_BODY` bájt), és az `fw_worker` háttérfeladat (PSRAM-verem) HTTP POST-tal küldi a cél `/ecowitt?fwd=1` címére
-(2 mp kapcsolódás, 3 mp válasz). Ha a cél nem érhető el, a sor betelik, az újak elmaradnak; a főciklus nem vár. A
-`fwd` mezős kérést a fogadó nem küldi tovább (nincs körbeküldés). A kezelőoldalon az utolsó továbbküldés eredménye és a
-sikeres/hibás/elmaradt darabszám látszik. A P4-en nem kell beállítani semmit: a konzolokat a `model`/`stationtype`
-alapján ismeri fel (a küldő IP-je ott mindig a 7B-é, ezért a `/raw` lapon a küldők a `stationtype` szerint válnak
-szét). Az ntfy-értesítéseket elég az egyik kijelzőn bekapcsolni.
+**Továbbküldés másik kijelző(k)re (v1.14.0-tól több célra, a felhasználó kérése: ha egy kijelző kiesik, csak a saját
+konzoljának adata hiányozzon, ne mindenkié):** eredetileg mindhárom konzol egyetlen kijelzőre küldött, az küldte
+tovább láncban a másik kettőnek — ez egyetlen hibapont volt (az a kijelző kiesett, senki nem kapott adatot). 2026.11.08-tól
+a konzolok külön-külön, a hozzájuk közelebbi kijelzőre küldenek, és mindegyik kijelző a másik KETTŐNEK továbbküldi a saját
+frissen kapott adatát (csillag alakban, mint a napelem-adat továbbküldésénél, `en_fw`). A beállítás csak a webes
+kezelőoldalon van, a kijelzőn nincs. A kezelőoldalon „Továbbküldés másik kijelzőre”: be/ki kapcsoló (NVS `cfg`/`fw_on`,
+alapból ki) és cél(ok) (`cfg`/`fw_h`, pl. `idojaras-p4.local` vagy egy IP-cím, esetleg `:port`, **vesszővel elválasztva
+több is**, legfeljebb 128 bájt); kikapcsolva vagy üres céllal nincs továbbküldés, a cél(ok) kikapcsolva is megmaradnak.
+A `handle_ecowitt_post()` a `fw_push()`-sal a beérkezett mezőket urlencoded alakban egyszer építi fel (PSRAM-puffer,
+`FwMsg`), majd minden célra külön üzenetet tesz egy 4 elemes sorba (`strtok` a listán, `fw_host_valid()` ellenőrzi
+egyenként), és az `fw_worker` háttérfeladat (PSRAM-verem) HTTP POST-tal küldi mindegyiket a cél `/ecowitt?fwd=N` címére
+(2 mp kapcsolódás, 3 mp válasz). Ha egy cél nem érhető el, csak az ő sora telik be, a többi és a főciklus nem vár. A
+`fwd` mezős (már továbbküldött) kérést a fogadó NEM küldi tovább megint — **buktató** (2026.11.08., élesben
+észrevéve): az első változat relézett is (a fogadó a kapott adatot is továbbküldte a saját céljainak), ami csillag-
+elrendezésnél (mindhárom kijelző egymásnak küld) oda vezetett, hogy a három kijelző körbe-körbe verte egymásnak a már
+megkapott adatot (a `fw_err`/`fw_drop` percek alatt több tucatra nőtt, „connection refused” hibákkal). Javítva:
+`fw_push()` a `fwd` paraméter puszta meglétére kilép, így egy adat csak egy ugrást tesz. A kezelőoldalon az utolsó
+továbbküldés eredménye és a sikeres/hibás/elmaradt darabszám látszik (összesítve az összes célra). Minden kijelző a
+konzolokat a `model`/`stationtype` alapján ismeri fel (a `/raw` lapon a küldők a `stationtype` szerint válnak szét,
+a forrás IP-je a ténylegesen küldő konzolé vagy, ha továbbküldésből jött, a köztes kijelzőé). Az ntfy-értesítéseket
+elég az egyik kijelzőn bekapcsolni.
 
 **Bemutató mód** (a felhasználó kérése): bemutatóhoz, konzolok és akár WiFi nélkül. Csak kézzel
 kapcsolható, a kijelzőn: Beállítások / Rendszer / „Bemutató mód...” (ill. „Bemutató kikapcsolása...”), megerősítés után
@@ -232,7 +241,8 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   „?” jel, ha a vezérlő 35 mp óta nem válaszol). A Bojler fül minden parancsa a vezérlőhöz megy (`POST /bojler`: `cmd=<DP-írás>`,
   ill. `auto=`, `on_w=`; a sorban `@`-tal kezdődő elem az automatika), az írja a bojlert. Ha a vezérlő nem elérhető, a DP-írás
   (Be/Ki, üzemmód, cél-hőfok) közvetlenül a bojlerhez megy, az automatika nem állítható. Így bármelyik kijelzőn váltva mind
-  ugyanazt mutatja (a felhasználó egyenrangú szinkront is felvetett; a főnökös változat mellett döntött, mert nem csúszhat el).
+  ugyanazt mutatja (a felhasználó jelezte, hogy ha egyik kijelzőről állítja a bojlert, a másik kettő nem tud róla; a főnökös
+  megoldást Claude javasolta erre, mert egyenrangú szinkronnál elcsúszhatna).
 - **Reggeli Eco-ablak (v1.12.0, 2026.11.07., a felhasználó kérése: a reggeli zuhanyra legyen elég melegvíz, de ne a drágább
   (T1) tarifában fűtsön):** `en_boiler_auto()` minden nap 5:00-6:00 között (helyi idő, `EN_BA_MORN_H0/H1`) Eco módra váltja a
   bojlert (az 55 °C-os plafonjáig felfűt, a cél-hőfokot nem írjuk át), 6:00-kor vissza Smart módra, az alap cél-hőfokra; a

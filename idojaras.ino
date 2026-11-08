@@ -278,11 +278,14 @@ constexpr bool TOUCH_SWIPE_INVERT     = false; // true: az ujjhúzás iránya fo
 // nt_topic: az ntfy.sh téma (üres: nincs értesítés); nt_mask: mely értesítések mennek (NT_* bitek)
 // snd_on: P4: hangjelzés, amikor megjelenik a "Szellőztess" (az éjszakai mód időszakában nem); snd_vol: 0 halk, 1 közepes, 2 hangos
 // cam_on: P4: automatikus fényerő a kamerával (a szoba fénye és a jelenlét szerint; lásd CAM_L_DARK)
-// fw_on, fw_host: a konzolok adatainak továbbküldése egy másik kijelzőre (be/ki; cél: gépnév vagy IP, esetleg :port)
+// fw_on, fw_host: a konzolok adatainak továbbküldése másik kijelző(k)re (be/ki; cél: gépnév vagy IP, esetleg :port,
+// akár több is vesszővel elválasztva, mint a napelem-adat továbbküldésénél, energia_01: en_fw)
+// mdns_n: egyedi mDNS-név felülírása (üres: a kijelzo.h alapértéke); kell, ha két azonos típusú board (pl. két 7B)
+// ütközne ugyanazon a néven (lásd mdns_name())
 struct Config { bool has_loc; double lat, lon; char tz[64]; char pw[33]; bool n_on; int n_st, n_en, n_pct, d_pct; int n_mode, n_so, n_ro;
-                char nt_topic[65]; int nt_mask; bool fw_on; char fw_host[65]; bool snd_on; int snd_vol; bool cam_on; };
+                char nt_topic[65]; int nt_mask; bool fw_on; char fw_host[130]; bool snd_on; int snd_vol; bool cam_on; char mdns_n[20]; };
 enum { NT_FROST = 1, NT_RAIN = 2, NT_CO2 = 4, NT_BATT = 8, NT_STALE = 16, NT_CRASH = 32, NT_BOIL = 64, NT_ALL = 127 };   // NT_BOIL: bojler hibája, automatikája
-static Config cfg = {false, 0.0, 0.0, "", "", true, 22 * 60, 6 * 60, 2, 100, 0, 30, 0, "", NT_ALL, false, "", true, 1, true};
+static Config cfg = {false, 0.0, 0.0, "", "", true, 22 * 60, 6 * 60, 2, 100, 0, 30, 0, "", NT_ALL, false, "", true, 1, true, ""};
 struct NtMsg { char title[64]; char msg[200]; char tags[24]; uint8_t prio; };   // egy telefonos értesítés (idojaras_17c)
 static bool co2_vent[3] = {};   // helyiségenként: "szellőztess" állapot (hiszterézissel; a felső sor és az értesítés is ezt használja)
 constexpr size_t FW_BODY = 3072;   // egy továbbküldött konzol-küldés legnagyobb mérete (urlencoded)
@@ -293,6 +296,9 @@ static const char *fw_status_text();
 // Nyelv: 0 = magyar, 1 = angol (NVS "cfg"/"lang", induláskor olvassuk; a felület indításkor épül fel, ezért a váltás újraindítással jár)
 static uint8_t g_lang = 0;
 static inline const char *tr(const char *hu, const char *en) { return g_lang ? en : hu; }
+
+// Az mDNS-név: alapból a MDNS_HOST (kijelzo.h), de felülírható (webes Beállítások), ha két azonos típusú board ütközne
+static inline const char *mdns_name() { return cfg.mdns_n[0] ? cfg.mdns_n : MDNS_HOST; }
 
 // Bemutató mód (NVS "cfg"/"demo", a kijelző Beállítások / Rendszer fülén kapcsolható, újraindítással): konzolok és WiFi
 // nélkül kitalált adatokat mutat, és magától lapoz (idojaras_17d). A valódi előzményekhez nem nyúl (nem ment).
@@ -389,6 +395,7 @@ static void cfg_load() {
   cfg.snd_vol = constrain(p.getInt("sndv", 1), 0, 2);
   cfg.cam_on = p.getBool("cam", true);
   strlcpy(cfg.fw_host, pref_str(p, "fw_h", "").c_str(), sizeof(cfg.fw_host));
+  strlcpy(cfg.mdns_n, pref_str(p, "mdns_n", "").c_str(), sizeof(cfg.mdns_n));
   // helyiségek (alapérték: a rooms[] kezdőértéke)
   for (int i = 0; i < ROOM_COUNT; i++) {
     char k[8];

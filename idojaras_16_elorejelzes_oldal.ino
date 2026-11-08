@@ -102,7 +102,7 @@ static void fc_update_ui() {
   const int si = fc_first_today();
   const bool ok = cfg.has_loc && fc.valid && si >= 0;
   const char *msg = "";
-  if (!cfg.has_loc)    msg = tr("Az előrejelzéshez add meg a helyet: " MDNS_HOST ".local", "Set the location for the forecast: " MDNS_HOST ".local");
+  if (!cfg.has_loc)    { snprintf(b, sizeof(b), tr("Az előrejelzéshez add meg a helyet: %s.local", "Set the location for the forecast: %s.local"), mdns_name()); msg = b; }
   else if (!fc.valid)  msg = fc_err[0] ? tr("Az előrejelzés most nem érhető el", "The forecast is not available right now") : tr("Előrejelzés betöltése...", "Loading forecast...");
   else if (si < 0)     msg = tr("Az előrejelzés elavult, frissítés...", "The forecast is outdated, refreshing...");
   set_label_if_changed(fc_msg, msg);

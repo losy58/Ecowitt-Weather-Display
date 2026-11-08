@@ -4,8 +4,7 @@
 // ---------------------------------------------------------------------------
 // Firmware-frissítés a böngészőből: http://idojaras.local/ vagy http://<a lap IP-je>/  (.bin feltöltése)
 // ---------------------------------------------------------------------------
-static const char *FW_NAME = "Ecowitt Weather Display v1.13.0" FW_BOARD;
-static const char *MDNS_NAME = MDNS_HOST;   // a név a hálózaton (kijelzo.h): idojaras.local, ill. idojaras-p4.local
+static const char *FW_NAME = "Ecowitt Weather Display v1.14.0" FW_BOARD;
 
 static lv_obj_t *ota_ov = NULL, *ota_l1 = NULL, *ota_l2 = NULL, *ota_fill = NULL;
 static bool ota_ok = false;
@@ -151,20 +150,44 @@ static void handle_settings_save() {
     cp.end();
   }
   en_settings_save(*cur_srv);   // energia (energia_01)
-  // továbbküldés másik kijelzőre (a http:// előtag és a záró / elhagyható)
+  // továbbküldés másik kijelző(k)re (címek vesszővel/szóközzel; mindegyikről a http:// előtag és a záró / elhagyható)
   if (cur_srv->hasArg("fw_h")) {
-    String h = cur_srv->arg("fw_h"); h.trim();
-    if (h.startsWith("http://")) h.remove(0, 7);
-    while (h.endsWith("/")) h.remove(h.length() - 1);
-    if (h.isEmpty() || fw_host_valid(h.c_str())) {
+    String v = cur_srv->arg("fw_h"); v.trim();
+    String out;
+    bool ok = v.length() < sizeof(cfg.fw_host);
+    char tmp[sizeof(cfg.fw_host)];
+    strlcpy(tmp, v.c_str(), sizeof(tmp));
+    for (char *tok = strtok(tmp, ", "); ok && tok; tok = strtok(NULL, ", ")) {
+      String h = tok;
+      if (h.startsWith("http://")) h.remove(0, 7);
+      while (h.endsWith("/")) h.remove(h.length() - 1);
+      if (!fw_host_valid(h.c_str())) { ok = false; break; }
+      if (out.length()) out += ", ";
+      out += h;
+    }
+    if (ok && out.length() < sizeof(cfg.fw_host)) {
       cfg.fw_on = cur_srv->hasArg("fw_on");
-      strlcpy(cfg.fw_host, h.c_str(), sizeof(cfg.fw_host));
+      strlcpy(cfg.fw_host, out.c_str(), sizeof(cfg.fw_host));
       CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
       Preferences fp;
       fp.begin("cfg", false);
       fp.putBool("fw_on", cfg.fw_on);
       fp.putString("fw_h", cfg.fw_host);
       fp.end();
+    }
+  }
+  // egyedi mDNS-név (ha két azonos típusú board ütközne ugyanazon a néven); csak betű, szám, kötőjel; változásnál újraindul
+  bool mdns_changed = false;
+  if (cur_srv->hasArg("mdns_n")) {
+    String m = cur_srv->arg("mdns_n"); m.trim();
+    if ((m.isEmpty() || mdns_name_valid(m.c_str())) && strcmp(m.c_str(), cfg.mdns_n) != 0) {
+      strlcpy(cfg.mdns_n, m.c_str(), sizeof(cfg.mdns_n));
+      CamPause cam_pause_;   // P4: a kamera áll a mentés alatt
+      Preferences mp;
+      mp.begin("cfg", false);
+      mp.putString("mdns_n", cfg.mdns_n);
+      mp.end();
+      mdns_changed = true;
     }
   }
   // helyiségek
@@ -213,6 +236,19 @@ static void handle_settings_save() {
                   "<body style='font-family:sans-serif;background:#121212;color:#eee;padding:30px'><h2>") +
                   (nl ? "Language saved" : "Nyelv mentve") + "</h2><p>" +
                   (nl ? "The display restarts; this page reloads in 25 seconds." : "A kijelző újraindul; az oldal 25 mp múlva újratöltődik.") +
+                  "</p></body></html>");
+    delay(500);
+    hist_save();
+    diag_mark_restart(RC_MANUAL);
+    ESP.restart();
+  }
+  // mDNS-név változott: újraindítás kell az érvényesítéséhez (az mDNS indulásnál regisztrálódik)
+  if (mdns_changed) {
+    cur_srv->send(200, "text/html; charset=utf-8", String("<html><head><meta charset='utf-8'><meta http-equiv='refresh' content='25;url=/'></head>"
+                  "<body style='font-family:sans-serif;background:#121212;color:#eee;padding:30px'><h2>") +
+                  tr("mDNS-név mentve", "mDNS name saved") + "</h2><p>" +
+                  tr("A kijelző újraindul az érvényesítéshez; ez a lap 25 mp múlva újratöltődik.",
+                     "The display restarts to apply it; this page reloads in 25 seconds.") +
                   "</p></body></html>");
     delay(500);
     hist_save();
@@ -311,22 +347,24 @@ static String ntfy_html() {
   return h;
 }
 
-// Továbbküldés másik kijelzőre: cél és az utolsó küldés eredménye
+// Továbbküldés másik kijelző(k)re: cél(ok) és az utolsó küldés eredménye
 static String forward_html() {
   String h = tr("<h3>Továbbküldés másik kijelzőre</h3>"
                 "<p style='color:#aaa;margin:0'>A konzoloktól kapott adatokat ez a kijelző változatlanul továbbküldi a megadott "
-                "kijelző <i>/ecowitt</i> címére (pl. idojaras-p4.local vagy 192.168.1.50). "
-                "Ha a cél nem érhető el, ennek a kijelzőnek a működése nem változik. Telefonos értesítést elég az egyiken beállítani.</p>",
+                "kijelző(k) <i>/ecowitt</i> címére (pl. idojaras-p4.local vagy 192.168.1.50; több cél is megadható vesszővel, pl. "
+                "ha minden konzol másik kijelzőre küld, és mindegyik a másik kettőnek adja tovább a saját adatát). "
+                "Ha egy cél nem érhető el, a többi és ennek a kijelzőnek a működése nem változik. Telefonos értesítést elég az egyiken beállítani.</p>",
                 "<h3>Forwarding to another display</h3>"
                 "<p style='color:#aaa;margin:0'>This display forwards the data received from the consoles unchanged to the "
-                "<i>/ecowitt</i> address of the given display (e.g. idojaras-p4.local or 192.168.1.50). "
-                "If the target is not reachable, this display keeps working normally. Phone notifications need to be set up on one "
-                "display only.</p>");
+                "<i>/ecowitt</i> address of the given display(s) (e.g. idojaras-p4.local or 192.168.1.50; several targets can be "
+                "given, comma-separated, e.g. if each console sends to a different display and each forwards its own data to the "
+                "other two). If one target is not reachable, the others and this display keep working normally. Phone notifications "
+                "need to be set up on one display only.</p>");
   h += "<label style='display:block'><input type='checkbox' name='fw_on'";
   if (cfg.fw_on) h += " checked";
   h += " style='width:auto;margin:0 8px 0 0'>";
-  h += tr("Továbbküldés bekapcsolva</label><label>Cél (gépnév vagy IP)</label>", "Forwarding on</label><label>Target (host name or IP)</label>");
-  h += "<input name='fw_h' maxlength='64' pattern='[A-Za-z0-9.:/-]*' value='";
+  h += tr("Továbbküldés bekapcsolva</label><label>Cél(ok) (gépnév vagy IP, vesszővel elválasztva)</label>", "Forwarding on</label><label>Target(s) (host name or IP, comma-separated)</label>");
+  h += "<input name='fw_h' maxlength='128' pattern='[A-Za-z0-9.:, -]*' value='";
   h += html_attr(cfg.fw_host);
   h += tr("'><p style='color:#aaa;margin:0'>Utolsó továbbküldés: ", "'><p style='color:#aaa;margin:0'>Last forward: ");
   h += (cfg.fw_on && cfg.fw_host[0]) ? html_attr(fw_status_text()) : String(cfg.fw_on ? tr("nincs megadva cél", "no target set") : tr("kikapcsolva", "off"));
@@ -355,6 +393,11 @@ static String settings_html() {
   }
   h += "<option value=''"; h += known ? "" : " selected"; h += ">"; h += tr("Egyéb (POSIX TZ szöveg)", "Other (POSIX TZ string)"); h += "</option></select>"
        "<input name='tz' id='tz' value='"; h += cfg.tz; h += "'>";
+  h += tr("<label>Egyedi hálózati név (ha ez a kijelző egy másikkal ütközne; alapból „" MDNS_HOST "”, csak betű, szám, kötőjel)</label>",
+          "<label>Custom network name (if this display collides with another; default “" MDNS_HOST "”, letters, digits, hyphen only)</label>");
+  h += "<input name='mdns_n' maxlength='19' pattern='[A-Za-z0-9-]*' value='"; h += cfg.mdns_n; h += "'>";
+  h += tr("<p style='color:#aaa;margin:0'>Mentés után a kijelző újraindul. Üresen hagyva: " MDNS_HOST ".local</p>",
+          "<p style='color:#aaa;margin:0'>The display restarts after saving. Left empty: " MDNS_HOST ".local</p>");
   h += rooms_html();
   h += "<h3>Nyelv / Language</h3><select name='lang' style='font-size:18px;width:100%;margin:14px 0'>";
   h += g_lang ? "<option value='0'>Magyar</option><option value='1' selected>English</option>"
