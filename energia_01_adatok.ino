@@ -1071,14 +1071,13 @@ static void en_age(uint32_t ms, char *out, size_t n) {
 
 // A kezelőoldal "Energia:" sora (HTML)
 static String en_text() {
-  if (!en_cfg.on) return tr("kikapcsolva", "off");
-  if (g_demo) return tr("bemutató módban nincs lekérés", "no requests in demo mode");
+  if (!en_cfg.on && !g_demo) return tr("kikapcsolva", "off");
   const EnData d = en_snapshot();
-  String h;
+  String h = g_demo ? tr("(kitalált adat, bemutató mód)", "(made-up data, demo mode)") : "";
   char b[200], age[16];
   // hálózat
   h += tr("<br>Hálózat: ", "<br>Grid: ");
-  if (!en_cfg.p1[0]) h += tr("nincs megadva", "not set");
+  if (!en_cfg.p1[0] && !g_demo) h += tr("nincs megadva", "not set");
   else if (d.p1_ms) {
     en_age(d.p1_ms, age, sizeof(age));
     snprintf(b, sizeof(b), d.grid_w >= 0 ? tr("vétel %.0f W", "import %.0f W") : tr("visszatáplálás %.0f W", "export %.0f W"), fabsf(d.grid_w));
@@ -1097,7 +1096,7 @@ static String en_text() {
   if (en_cfg.p1[0] && d.p1_err[0]) { h += " <span style='color:#ff8a80'>"; h += html_attr(d.p1_err); h += "</span>"; }
   // bojler
   h += tr("<br>Bojler: ", "<br>Boiler: ");
-  if (!en_cfg.sk[0]) h += tr("nincs megadva", "not set");
+  if (!en_cfg.sk[0] && !g_demo) h += tr("nincs megadva", "not set");
   else if (d.sk_ms) {
     en_age(d.sk_ms, age, sizeof(age));
     snprintf(b, sizeof(b), tr("%.0f W (%s), összesen %.1f kWh", "%.0f W (%s ago), total %.1f kWh"), d.boil_w, age, d.boil_kwh);
@@ -1106,7 +1105,7 @@ static String en_text() {
     if (!isnan(tb)) { snprintf(b, sizeof(b), tr(", ma %.2f kWh", ", today %.2f kWh"), tb); h += b; }
   } else h += tr("még nincs adat", "no data yet");
   if (en_cfg.sk[0] && d.sk_err[0]) { h += " <span style='color:#ff8a80'>"; h += html_attr(d.sk_err); h += "</span>"; }
-  if (en_cfg.bl[0]) {
+  if (en_cfg.bl[0] || g_demo) {
     h += tr("<br>Bojler hőfoka: ", "<br>Water heater temperature: ");
     if (d.bl_ms) {
       en_age(d.bl_ms, age, sizeof(age));

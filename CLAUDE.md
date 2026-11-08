@@ -21,7 +21,7 @@ Az Ecowitt konzolok „customized upload” (Ecowitt protokoll) küldéseit foga
   Előtte ellenőrizve: a kódban és a dokumentációban nincs személyes adat (ntfy-téma, otthoni koordináta, IP, e-mail;
   a képekben EXIF/GPS); az ntfy-témát a felhasználó lecserélte. A Claude-os nyomok (Co-Authored-By sor, `CLAUDE.md`,
   `.claude/`) maradhatnak: nem titok (a felhasználó döntése). Új személyes adat ezután se kerüljön a tárolóba.
-- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0; 2026.10.25.: v1.4.1, v1.4.2, v1.4.3; 2026.10.27.: v1.5.0; 2026.11.02.: v1.10.0; 2026.11.03.: v1.10.1, v1.11.0; 2026.11.06.: v1.11.1): a felhasználóknak kész programfájlok, fordítás nélkül (README:
+- **Kiadás (GitHub Releases)** (2026.10.16.: v1.0; 2026.10.17.: v1.1.0, v1.2.0; 2026.10.19.: v1.3.2; 2026.10.22.: v1.4.0; 2026.10.25.: v1.4.1, v1.4.2, v1.4.3; 2026.10.27.: v1.5.0; 2026.11.02.: v1.10.0; 2026.11.03.: v1.10.1, v1.11.0; 2026.11.06.: v1.11.1; 2026.11.08.: v1.15.0): a felhasználóknak kész programfájlok, fordítás nélkül (README:
   „Telepítés fordítás nélkül”). Kijelzőnként a `.pio/build/<env>/firmware.factory.bin` (első telepítés USB-n a `0x0`
   címre: betöltő – a 7B-n 0x0, a P4-en 0x2000 –, partíciótábla, program; az NVS-t üresre írja, az FFat-et nem érinti)
   és a `firmware.bin` (OTA). Nevük: `Ecowitt-Weather-Display-vX.Y.Z-7B-factory.bin`, `…-7B-ota.bin`, `…-P4-factory.bin`,
@@ -127,10 +127,21 @@ kapcsolható, a kijelzőn: Beállítások / Rendszer / „Bemutató mód...” (
 - a valódi oldalak kitalált, de életszerű adatokkal (`demo_eval()`: napszak, évszak, lassú hullámok, délutáni esős napok,
   helyiségenként CO2-menet), 16 mp-enként „új adat”; a 7 napos előzmény és a 400 napos napi összesítő is ebből készül,
   így a grafikonok (nap/hét/hónap) és a pillanatnyi értékek egyeznek; előrejelzés is (4 nap, 24 óra);
-- magától lapoz (`DEMO_STEPS`: főoldal, előrejelzés, grafikonok napi/heti/havi nézetben, részletes adatok); érintés
-  után a lépés ideje újraindul, nyitott Beállítások / fényerő panel / nagy grafikon alatt áll;
+- magától lapoz (`DEMO_STEPS`: főoldal, Energia, előrejelzés, grafikonok napi/heti/havi nézetben, részletes adatok);
+  érintés után a lépés ideje újraindul, nyitott Beállítások / fényerő panel / nagy grafikon alatt áll;
 - **a valódi előzményfájlokat nem írja** (`hist_save`, `days_save` kilép), nincs Open-Meteo-lekérés, ntfy-értesítés,
   továbbküldés, és a konzolok küldéseit sem használja (az `/ecowitt` csak OK-t válaszol);
+- **Energia oldal kitalált adattal is** (v1.15.0, 2026.11.08., a felhasználó kérése: addig bemutató módban az Energia
+  oldal teljesen hiányzott, mert nem volt hozzá kitalált adat): az Energia oldal bemutató módban a beállítástól
+  (`en_cfg.on`) függetlenül mindig a lapozásban van. A valódi `en_worker` háttérfeladat ilyenkor sem indul el; a
+  napelem termelését a `demo_eval()` napsugárzás-görbéjéből (`v.sol`) számolja (`demo_en_eval()`,
+  `idojaras_17d_bemutato.ino`), hogy egy felhős/esős nap a termelést is visszafogja, mint a valóságban. A ház
+  fogyasztása reggeli/esti csúccsal, a bojler a reggeli Eco-ablakban (5:00-5:30) és napelem-többletnél fűt (mint az
+  igazi automatikánál). A mai nap diagramja (`en_pv`) és a mérőállások éjféltől a jelen percig töltődnek ki
+  (`demo_energy_generate()`: induláskor, időugrás után és négy másodpercenként újraszámolva, az utána lévő szeleteket
+  üresen hagyva, mint a valódinál); a kezdő (élethosszi) mérőállások kitalált, de rögzített konstansok
+  (`DEMO_EN_BASE_IMP/EXP/BOIL`). A kezelőoldal „Energia:” sora is ezt mutatja (a `en_cfg.p1/sk/bl` mezők üresen
+  hagyva is), „(kitalált adat, bemutató mód)” jelzéssel.
 - induláskor nem vár WiFi-re és nincs beállító portál: ha van mentett hálózat, a háttérben csatlakozik
   (`wifiBeginNoWait()`; kezelőoldal, OTA, pontos idő). Pontos idő nélkül a fordítás idejéről indul az óra; ha később
   megjön az NTP-idő (az idő ugrik), az adatok újraszámolódnak;

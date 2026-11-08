@@ -11,7 +11,7 @@ constexpr double DEMO_LAT = 48.1035, DEMO_LON = 20.7784;    // a bemutató helye
 constexpr float DEMO_PI = 3.14159265f, DEMO_PI2 = 6.2831853f;
 // lapozás: oldal, grafikon-nézet (0: nap, 1: hét, 2: hónap), másodperc
 static const int DEMO_STEPS[][3] = {
-  {PAGE_DASH, 0, 20}, {PAGE_FC, 0, 12}, {PAGE_HIST, 0, 12}, {PAGE_HIST2, 0, 12},
+  {PAGE_DASH, 0, 20}, {PAGE_ENERGY, 0, 12}, {PAGE_FC, 0, 12}, {PAGE_HIST, 0, 12}, {PAGE_HIST2, 0, 12},
   {PAGE_HIST, 1, 10}, {PAGE_HIST2, 1, 10}, {PAGE_HIST, 2, 10}, {PAGE_DETAILS, 0, 12},
 };
 constexpr int DEMO_STEP_N = sizeof(DEMO_STEPS) / sizeof(DEMO_STEPS[0]);
@@ -302,6 +302,109 @@ static void demo_tick() {
   update_status_bar();
 }
 
+// Az Energia oldal kitalált adatai (a felhasználó kérése, 2026.11.08.: bemutató módban is legyen rajta adat).
+// A valódi lekérés (en_worker) bemutató módban nem indul el; ugyanúgy az időből számolunk, mint a demo_eval()-nál, és a
+// napelem termelését a demo_eval() napsugárzás-görbéjéből (v.sol) vesszük, hogy egy felhős/esős nap a termelést is
+// visszafogja. A bojler a reggeli Eco-ablakban (5:00-5:30) és napelem-többletnél fűt, mint az igazi automatikánál.
+constexpr float DEMO_EN_PV_SCALE = 4.0f;           // v.sol -> napelem teljesítmény (egy kb. 4-5 kWp rendszernek megfelelő)
+constexpr float DEMO_EN_LOAD_BASE_W = 280.0f;      // a ház alapterhelése reggeli/esti csúccsal
+constexpr float DEMO_EN_BOIL_W = 2000.0f;
+constexpr float DEMO_EN_SURPLUS_ON_W = 1200.0f;    // ennyi napelem-többlet fölött fűt a bojler
+constexpr float DEMO_EN_BASE_IMP = 18342.0f, DEMO_EN_BASE_EXP = 6120.0f, DEMO_EN_BASE_BOIL = 7946.0f;   // kezdő (élethosszi) mérőállások
+constexpr uint32_t DEMO_EN_TICK_MS = 4000;         // ilyen gyakran frissül (a valódi P1 2 mp-enként, de itt elég)
+static uint32_t demo_en_last_tick = 0;
+
+static float demo_en_load_w(float h, uint32_t s) {
+  return DEMO_EN_LOAD_BASE_W + 900.0f * demo_bump(h, 8.0f, 1.5f) + 1300.0f * demo_bump(h, 19.0f, 2.5f) + 60.0f * demo_noise(s, 20);
+}
+
+// egy időpont adatai: napelem, fogyasztás, bojler, hálózat (W; a hálózatnál + vétel, - visszatáplálás)
+static void demo_en_eval(time_t t, const struct tm &lt, float &pv_w, float &load_w, float &boil_w, float &grid_w) {
+  DemoVals v;
+  demo_eval(t, lt, v);
+  const float h = lt.tm_hour + lt.tm_min / 60.0f + lt.tm_sec / 3600.0f;
+  const uint32_t s = (uint32_t)(t / 300);
+  pv_w = fmaxf(0.0f, v.sol * DEMO_EN_PV_SCALE);
+  load_w = demo_en_load_w(h, s);
+  const bool morning = h >= 5.0f && h < 5.5f;
+  const bool solar = pv_w - load_w > DEMO_EN_SURPLUS_ON_W;
+  boil_w = (morning || solar) ? DEMO_EN_BOIL_W + 60.0f * demo_noise(s, 21) : 2.0f;
+  grid_w = load_w + boil_w - pv_w;
+}
+
+static int32_t demo_en_key(const struct tm &lt) { return (lt.tm_year + 1900) * 400 + lt.tm_yday; }
+
+// A mai nap diagramja (en_pv) és a mai/összes mérőállás kitöltése/frissítése, éjféltől a jelen percig (a valódihoz
+// hasonlóan az azutáni szeleteket üresen hagyja). Induláskor, időugrás után és négy másodpercenként is újraszámolja
+// (az ESP32-nek ez semmiség, és így a kijelzett adat sosem marad el a pillanatnyitól).
+static void demo_energy_generate() {
+  const time_t now = time(nullptr);
+  if (now < 1600000000) return;
+  struct tm lt;
+  localtime_r(&now, &lt);
+  const int32_t key = demo_en_key(lt);
+  en_pv_day(key);
+  const int ns = constrain((lt.tm_hour * 60 + lt.tm_min) / 5, 0, EN_PV_N - 1);
+  const time_t midnight = now - (lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec);
+  double imp_sum = 0, exp_sum = 0, boil_sum = 0, pv_sum = 0;
+  for (int s = 0; s <= ns; s++) {
+    const time_t t = midnight + (time_t)s * 300;
+    struct tm slt;
+    localtime_r(&t, &slt);
+    float pv_w, load_w, boil_w, grid_w;
+    demo_en_eval(t, slt, pv_w, load_w, boil_w, grid_w);
+    en_pv.w[s] = (uint16_t)constrain((int)lroundf(pv_w), 0, 65000);
+    en_pv.net[s] = (int16_t)constrain((int)lroundf(grid_w), -32000, 32000);
+    en_pv.boil[s] = (int16_t)constrain((int)lroundf(boil_w), 0, 32000);
+    pv_sum += pv_w * (5.0 / 60.0 / 1000.0);
+    boil_sum += boil_w * (5.0 / 60.0 / 1000.0);
+    if (grid_w > 0) imp_sum += grid_w * (5.0 / 60.0 / 1000.0); else exp_sum += -grid_w * (5.0 / 60.0 / 1000.0);
+  }
+  en_pv_last = ns;
+  en_pv_ver++;
+  en_day = {key, 0, DEMO_EN_BASE_IMP, DEMO_EN_BASE_EXP, DEMO_EN_BASE_BOIL};
+
+  float pv_now, load_now, boil_now, grid_now;
+  demo_en_eval(now, lt, pv_now, load_now, boil_now, grid_now);
+  const float h_now = lt.tm_hour + lt.tm_min / 60.0f + lt.tm_sec / 3600.0f;
+  const bool morning_now = h_now >= 5.0f && h_now < 5.5f;
+  const bool solar_now = pv_now - load_now > DEMO_EN_SURPLUS_ON_W;
+  const bool heat_now = morning_now || solar_now;
+  char upd[24];
+  struct tm gt = lt;
+  gt.tm_min -= gt.tm_min % 5; gt.tm_sec = 0;
+  strftime(upd, sizeof(upd), "%Y-%m-%d %H:%M:%S", &gt);
+
+  portENTER_CRITICAL(&en_mux);
+  EnData &d = en_data;
+  d.p1_ms = d.sk_ms = d.gw_ms = d.bl_ms = d.rb_ms = millis();
+  d.rb_auto = heat_now; d.rb_on_w = (int)DEMO_EN_SURPLUS_ON_W; d.rb_t0 = 48; d.rb_t1 = 75; d.rb_err[0] = 0;
+  d.grid_w = grid_now;
+  d.u[0] = 235.0f + 2.0f * demo_noise((uint32_t)(now / 300), 22);
+  d.u[1] = 236.0f + 2.0f * demo_noise((uint32_t)(now / 300), 23);
+  d.u[2] = 234.0f + 2.0f * demo_noise((uint32_t)(now / 300), 24);
+  d.i[0] = fabsf(grid_now) / 230.0f; d.i[1] = 0.3f; d.i[2] = 0.2f;
+  d.imp_kwh = DEMO_EN_BASE_IMP + (float)imp_sum; d.exp_kwh = DEMO_EN_BASE_EXP + (float)exp_sum;
+  d.tariff = (lt.tm_hour >= 6 && lt.tm_hour < 22) ? 1 : 2;
+  d.boil_w = boil_now; d.boil_kwh = DEMO_EN_BASE_BOIL + (float)boil_sum;
+  d.pv_w = pv_now; d.pv_day = (float)pv_sum; d.pv_month = d.pv_day * lt.tm_mday * 0.82f; d.pv_year = d.pv_day * (lt.tm_yday + 1) * 0.78f;
+  strlcpy(d.gw_upd, upd, sizeof(d.gw_upd));
+  d.plant_id = 1; d.gw_remote = false;
+  d.boil_temp = heat_now ? 68.0f : 44.0f; d.boil_water_pct = heat_now ? 85.0f : 55.0f;
+  strlcpy(d.boil_state, heat_now ? "heating" : "warm", sizeof(d.boil_state));
+  strlcpy(d.boil_mode, "manmenu", sizeof(d.boil_mode));
+  d.boil_set = solar_now ? 75.0f : 48.0f; d.boil_sw = 1; d.boil_fault = 0;
+  d.p1_err[0] = d.sk_err[0] = d.gw_err[0] = d.bl_err[0] = 0;
+  portEXIT_CRITICAL(&en_mux);
+}
+
+// a loop()-ból (demo_task hívja): az Energia oldal adatainak ébren tartása, nem csak a lapozás 16 mp-es ütemében
+static void demo_energy_task() {
+  if (millis() - demo_en_last_tick < DEMO_EN_TICK_MS && demo_en_last_tick != 0) return;
+  demo_en_last_tick = millis();
+  demo_energy_generate();
+}
+
 // a fordítás ideje (helyi idő), ha nincs pontos idő (WiFi nélkül)
 static time_t demo_build_time() {
   static const char MONTHS[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -331,6 +434,7 @@ static void demo_start() {
   demo_generate();
   demo_forecast();
   demo_tick();
+  demo_energy_generate();
   demo_last_tick = millis();
 }
 
@@ -359,9 +463,11 @@ static void demo_task() {
     demo_generate();
     demo_forecast();
     demo_tick();
+    demo_energy_generate();
     demo_last_tick = millis();
   }
   if (!fc.valid || millis() - demo_last_fc >= DEMO_FC_MS) demo_forecast();
   if (millis() - demo_last_tick >= DEMO_TICK_MS) { demo_last_tick = millis(); demo_tick(); }
+  demo_energy_task();
   demo_rotate();
 }

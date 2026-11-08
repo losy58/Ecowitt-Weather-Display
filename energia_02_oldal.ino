@@ -116,8 +116,8 @@ constexpr int EN_FSCH_X = SX(90), EN_FSCH_Y = SY(140), EN_FSCH_W = LCD_H_RES - E
 static bool en_fs_open = false;
 static lv_obj_t *en_fs_page = NULL, *en_fsch_cv = NULL, *en_fsch_peak = NULL, *en_fsch_ylab[EN_CH_YLAB_MAX] = {};
 
-// van-e energia oldal a lapozásban
-static bool en_page_enabled() { return en_cfg.on && !g_demo; }
+// van-e energia oldal a lapozásban (bemutató módban kitalált adattal mindig van)
+static bool en_page_enabled() { return en_cfg.on || g_demo; }
 
 // a következő / előző oldal (a kikapcsolt energia oldalt kihagyja)
 static int page_step(int p, int dir) {
