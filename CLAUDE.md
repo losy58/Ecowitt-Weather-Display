@@ -163,7 +163,7 @@ nap összesítője áll, **kivéve a Hőmérsékletet**: ott a „Max” / „Mi
 - Diagnosztika: az utolsó indulások oka és a coredump partícióba mentett összeomlás (`idojaras_12_diagnosztika.ino`).
 
 **Webes végpontok** (`app_setup()`): `/` és `/update` (kezelőoldal + OTA), `/settings`, `/raw` (konzolok nyers adatai),
-`/ecowitt` (adatfogadás; `?fwd=N`: továbbküldött adat, legfeljebb 3 lépés), `/energia` (POST: másik kijelzőtől továbbküldött napelem-adat), `/bojler` (a bojler vezérlője: GET állapot, POST a távirányító kijelzők parancsai), `/screenshot` (lásd „Képernyőkép”), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`; minden ismeretlen cím a beállító hálózaton a
+`/ecowitt` (adatfogadás; `?fwd=N`: továbbküldött adat, legfeljebb 3 lépés), `/energia` (POST: másik kijelzőtől továbbküldött napelem-adat), `/bojler` (a bojler vezérlője: GET állapot, POST a távirányító kijelzők parancsai), `/screenshot` (lásd „Képernyőkép”), `/restart` (POST: kézi újraindítás a gomb nélkül is elérhető kijelzőkhöz, v1.17.0, a felhasználó kérése: egy kijelzőn elcsúszott a kép, a gomb nem volt elérhető, szét kellett szedni), `/clearcrash`, `/coredump` (a teljes mentett összeomlás letöltése), `/ntfytest`, `/beeptest` (P4), `/wifiscan`, `/wifiset`, `/wifistatus`, `/wifiportal`, `/wififorget`; minden ismeretlen cím a beállító hálózaton a
 beállító oldalra irányít (`onNotFound`). mDNS név: `idojaras`.
 
 **Memória:** a belső RAM szűkös (`INTERNAL_RAM_RESERVE` marad a WiFi-nek); a nagy pufferek, az LVGL és az mbedTLS

@@ -168,6 +168,7 @@ void app_setup() {
   my_server.on("/bojler", handle_bojler);   // a bojler vezérlője: állapot (GET) és a távirányító kijelzők parancsai (POST)
   my_server.on("/ecowitt", HTTP_POST, handle_ecowitt_post);
   my_server.on("/ecowitt", HTTP_GET, handle_ecowitt_post);
+  my_server.on("/restart", HTTP_POST, handle_restart);
   my_server.on("/clearcrash", HTTP_POST, handle_clear_crash);
   my_server.on("/coredump", HTTP_GET, handle_coredump);
   my_server.on("/ntfytest", HTTP_POST, handle_ntfy_test);

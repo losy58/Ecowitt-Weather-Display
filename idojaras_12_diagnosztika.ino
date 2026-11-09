@@ -176,6 +176,11 @@ static String diag_html() {
   } else {
     h += tr("<p>Mentett összeomlás: nincs</p>", "<p>Saved crash: none</p>");
   }
+  h += "<form method='POST' action='/restart' onsubmit=\"return confirm('";
+  h += tr("A kijelző most újraindul. Mehet?", "The display will restart now. Continue?");
+  h += "')\"><button type='submit' style='background:#6a2a1f;color:#eee'>";
+  h += tr("Kijelző újraindítása", "Restart display");
+  h += "</button></form>";
   return h;
 }
 
@@ -205,6 +210,20 @@ static void handle_coredump() {
   cur_srv->send(200, "application/octet-stream", "");
   for (size_t o = 0; o < size; o += 4096) cur_srv->sendContent((const char *)buf + o, size - o < 4096 ? size - o : 4096);
   free(buf);
+}
+
+// a kijelző gombja nélkül is újraindítható a kezelőoldalról (pl. ha a tok/falra szerelés miatt a gomb nem elérhető)
+static void handle_restart() {
+  if (!ota_auth_ok()) { request_auth(); return; }
+  cur_srv->send(200, "text/html; charset=utf-8", String("<html><head><meta charset='utf-8'><meta http-equiv='refresh' content='25;url=/'></head>"
+                "<body style='font-family:sans-serif;background:#121212;color:#eee;padding:30px'><h2>") +
+                tr("Újraindul", "Restarting") + "</h2><p>" +
+                tr("A kijelző újraindul; ez a lap 25 mp múlva újratöltődik.", "The display restarts; this page reloads in 25 seconds.") +
+                "</p></body></html>");
+  delay(500);
+  hist_save();
+  diag_mark_restart(RC_MANUAL);
+  ESP.restart();
 }
 
 static void handle_clear_crash() {
