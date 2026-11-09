@@ -272,6 +272,14 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   automatikus visszaállás Smart módra), a mérés a leírt 30 perchez képest 31 percet mutatott; az automatikus napi
   indítás ugyanezen a napon, 11:37-kor lefutott (ntfy: „Bojler: Anti-bakteriális ciklus”), utána a bojler Smart
   módban, a napelemes cél-hőfokon folytatta.
+- **Az Anti-bakteriális ciklus megszakítása hálózati fűtésnél (v1.16.0, 2026.11.09., a felhasználó kérése: „ha
+  anti-bakteriális ciklus alatt 10 perce már a hálózatból több, mint 500W-ot vesz fel, szakadjon meg a ciklus, tehát
+  küldj neki egy smart módot” – ha a napelem elapad, ne a hálózatból fűtsön 80 °C-ra):** `en_boiler_auto()` amíg a
+  ciklus fut (`boil_mode == "highwarm"`), figyeli a hálózati vételt (`d.grid_w`); ha folyamatosan `EN_BA_HW_ABORT_W`
+  = 500 W fölött van legalább `EN_BA_HW_ABORT_MS` = 10 percig, DP 2-t vissza `manmenu`-ra (Smart) írja, ntfy-
+  értesítést küld (NT_BOIL), és kilép (a hiszterézis és a reggeli Eco-ablak csak a következő körben jöhet). Kipróbálva
+  (2026.11.09.): kézi indítás 15:20-kor, a hálózat eközben tartósan kb. 2100-2130 W-ot vett fel (napelem-termelés
+  gyakorlatilag nulla volt) – 15:30-kor (pontosan 10 perc múlva) a bojler Smart módra váltott, az ntfy-napló jelezte.
 - **S3-as 7B: OTA után az újraindítás oka néha `RTCWDT_RTC_RST`** (a szoftveres reset nem fejeződik be, az ESP-IDF tartalék RTC
   watchdogja végzi, kb. 1 mp múlva; a kijelző ártalmatlanul elindul). A `diag_init()` ezt kért újraindításnak jegyzi, ha a program
   maga kért újraindítást (`diag_mark_restart`). A P4-en nem fordult elő; az okát nem találtuk meg (a háttérfeladat leállítása

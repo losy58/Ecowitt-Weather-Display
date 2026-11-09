@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 // Firmware-frissítés a böngészőből: http://idojaras.local/ vagy http://<a lap IP-je>/  (.bin feltöltése)
 // ---------------------------------------------------------------------------
-static const char *FW_NAME = "Ecowitt Weather Display v1.15.0" FW_BOARD;
+static const char *FW_NAME = "Ecowitt Weather Display v1.16.0" FW_BOARD;
 
 static lv_obj_t *ota_ov = NULL, *ota_l1 = NULL, *ota_l2 = NULL, *ota_fill = NULL;
 static bool ota_ok = false;
