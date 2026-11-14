@@ -186,7 +186,7 @@ Nem kötelező funkció (alapból ki; NVS `cfg`/`en_on`): egy HomeWizard P1 mér
   kijelzőn ugyanaz a token, és a pontos (NTP-) idő szerint felváltva kérdeznek: a kör `EN_GW_RING_S` = 930 mp (15,5 perc), a
   slotok 0 / 310 / 620 mp-nél (a tokenre 5 perc 10 mp-enként jut kérés: az 5 perc a Growatt határa, 10 mp ráhagyás), a slot
   kezdete után 2 percig indulhat, körönként egyszer. Mindegyik továbbküld a másik kettőnek (`en_fw`), így mindenki 5 percenként
-  kap friss adatot; ha egy kiesik, a többi pótolja. Beállítás: P4 = 1., `idojaras.local` = 2., `192.168.0.113` = 3.
+  kap friss adatot; ha egy kiesik, a többi pótolja. Beállítás: pl. a P4 = 1., a második kijelző = 2., a harmadik = 3.
 - **Growatt 10012 („error_frequently_access”):** a Growatt a sűrű lekérdezést elutasítja, és ugyanaz a token több kijelzőn
   egymást is kiüti. Ezért a tokent csak EGY kijelzőn szabad megadni; az továbbküldi a napelem-adatot (`en_fw`: HTTP POST a cél
   `/energia` címére, `en_fw_send()`), a többi fogadja (`handle_energia_post()`, `EnData::gw_remote`). 10012 után 10 percet vár, az
