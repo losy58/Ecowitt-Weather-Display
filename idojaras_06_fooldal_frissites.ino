@@ -109,7 +109,10 @@ static void update_dashboard() {
   if (raining)      ic = ICON_RAIN;
   else if (have_fc) ic = (w.solar_wm2 < 3.0f && (fi == ICON_SUN || fi == ICON_PARTLY)) ? ICON_NIGHT : fi;
   else              ic = pick_icon();
-  if (fcl[0]) set_label_if_changed(d_fc1, fcl);
+  // esőnél a felirat egyértelműen "Esik" (a felhő ikon önmagában nem különbözteti meg a tényleges esőt az
+  // előrejelzéstől; a felhasználó kérése)
+  if (raining) set_label_if_changed(d_fc1, tr("Esik", "Raining"));
+  else if (fcl[0]) set_label_if_changed(d_fc1, fcl);
   else { snprintf(b, sizeof(b), "%s %s", have_fc ? f1 : tr("Adatot", "Collecting"), have_fc ? f2 : tr("gyűjtök", "data")); set_label_if_changed(d_fc1, b); }
   update_trends();
   for (int i = 0; i < ICON_COUNT; i++) {

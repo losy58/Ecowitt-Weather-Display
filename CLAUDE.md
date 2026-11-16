@@ -155,6 +155,13 @@ A felirat a pont fölött / alatt, ha ott nem fér el a grafikonon belül, melle
 nap összesítője áll, **kivéve a Hőmérsékletet**: ott a „Max” / „Min” a hónap szélső értéke, ugyanaz, mint a jelen
 (`series_text()`; v1.3.2, a felhasználó kérése: előtte a mai nap értéke volt, és nem egyezett a jellel).
 
+**Főoldal, eső-ikon egyértelműsítése (v1.18.0, 2026.11.16., a felhasználó kérése):** a felső sor eső-felhő ikonja
+akkor is megjelenik, ha nem most esik, csak az internetes előrejelzés szerint esős a mai (vagy 15 óra után a holnapi)
+nap – ezt korábban semmi nem különböztette meg (az „Eső ma: … mm” érték sem jó erre, mert már elállt esőnél is
+pozitív marad). `update_dashboard()`-ban (`idojaras_06_fooldal_frissites.ino`) ha ténylegesen esik (`raining`, az
+állomás érzékelője szerint), az ikon melletti szöveg mindig „Esik” (az előrejelzés dátum/hőmérséklet szövege helyett);
+különben változatlanul az előrejelzés vagy a nyomástrend-becslés szövege látszik.
+
 **Tárolás:**
 - NVS (`Preferences`, `"cfg"` névtér): hely, időzóna, kezelőoldal jelszava, éjszakai mód.
 - FFat: `/hist.bin` (7 nap 5 perces minta, `HistSample`, PSRAM-ban tartva) és `/days.bin` (400 napi összesítő, havi
