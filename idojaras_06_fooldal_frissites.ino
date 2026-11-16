@@ -149,7 +149,7 @@ static void update_dashboard() {
   set_col(d_ihum,  tint(COL_BLUE, COL_BG_BR));
   set_col(d_co2,   tint(c_co2, COL_BG_BR));
   set_col(d_press, tint(0xE8E8E8, COL_BG_TL));
-  set_col(d_fc1,   tint(COL_TEXT, COL_BG_TL));
+  set_col(d_fc1,   tint(raining ? COL_BLUE : COL_TEXT, COL_BG_TL));
   set_col(d_rain,  tint(COL_TEXT, COL_BG_TL));
   set_col(d_wnum,  tint(0xE8E8E8, COL_BG_TL));
   set_col(d_wgust, tint(c_gust, COL_BG_TL));

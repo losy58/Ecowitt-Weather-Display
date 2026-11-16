@@ -160,7 +160,9 @@ akkor is megjelenik, ha nem most esik, csak az internetes előrejelzés szerint 
 nap – ezt korábban semmi nem különböztette meg (az „Eső ma: … mm” érték sem jó erre, mert már elállt esőnél is
 pozitív marad). `update_dashboard()`-ban (`idojaras_06_fooldal_frissites.ino`) ha ténylegesen esik (`raining`, az
 állomás érzékelője szerint), az ikon melletti szöveg mindig „Esik” (az előrejelzés dátum/hőmérséklet szövege helyett);
-különben változatlanul az előrejelzés vagy a nyomástrend-becslés szövege látszik.
+különben változatlanul az előrejelzés vagy a nyomástrend-becslés szövege látszik. A felirat ilyenkor kék színű
+(`COL_BLUE`, a többi szürkésfehér felirattól eltérően; v1.18.1, 2026.11.16., a felhasználó kérése: a sima szöveg
+nem volt elég figyelemfelkeltő).
 
 **Tárolás:**
 - NVS (`Preferences`, `"cfg"` névtér): hely, időzóna, kezelőoldal jelszava, éjszakai mód.
